@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", // Mais moderno para Node.js 20+
+    "module": "NodeNext", // Diz ao TypeScript para gerar código compatível com ES Modules do Node.js
+    "moduleResolution": "NodeNext", // Como o TypeScript resolve módulos (import/require)
+    "lib": ["esnext"], // Apenas bibliotecas JS para o backend
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": false, // Permitir que o TypeScript emita os arquivos .js compilados
+    "outDir": "./dist", // Onde os arquivos .js compilados serão colocados
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true, // Manter se você estiver usando transpilação isolada (ts-node-dev)
+    "resolveJsonModule": true,
+    // REMOVIDO: "jsx": "preserve", (não é um projeto React/JSX)
+    // REMOVIDO: "incremental": true, (opcional, pode manter ou remover)
+    // REMOVIDO: "plugins": [...] (plugins do Next.js)
+    // REMOVIDO: "paths": { "@/*": ["./src/*"] } (não usado no backend desta forma)
+  },
+  "include": ["./*.ts", "./routes/**/*.ts", "./prisma/**/*.ts"], // Inclui index.ts e arquivos em routes e prisma
+  "exclude": ["node_modules"]
+}

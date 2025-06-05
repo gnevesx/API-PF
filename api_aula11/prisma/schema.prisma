@@ -1,0 +1,64 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // Verifique se está 'postgresql' ou 'postgres'
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  VISITOR
+}
+
+model User {
+  id                    String    @id @default(uuid())
+  email                 String    @unique
+  password              String
+  name                  String
+  role                  Role      @default(VISITOR)
+  recoveryCode          String?   // Novo campo para o código de recuperação
+  recoveryCodeExpiresAt DateTime? // Novo campo para a expiração do código
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  carts                 Cart[]
+}
+
+model Product {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  price       Float
+  imageUrl    String?
+  category    String?
+  size        String?
+  color       String?
+  stock       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  cartItems   CartItem[]
+}
+
+model Cart {
+  id        String     @id @default(uuid())
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id])
+  cartItems CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id        String    @id @default(uuid())
+  cartId    String
+  productId String
+  quantity  Int
+  cart      Cart      @relation(fields: [cartId], references: [id])
+  product   Product   @relation(fields: [productId], references: [id])
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}

@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Estilos globais para um visual mais limpo */
+html, body {
+  @apply h-full bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100; /* Fundo branco, texto principal preto */
+  font-family: 'Inter', sans-serif; /* Ou outra fonte de sua preferência */
+  scroll-behavior: smooth;
+}
+
+/* Adicione um estilo para imagens placeholder se necessário */
+.placeholder-image {
+  @apply bg-gray-200 text-gray-500 flex items-center justify-center text-center text-sm;
+  min-height: 100px; /* Altura mínima para placeholders */
+}
