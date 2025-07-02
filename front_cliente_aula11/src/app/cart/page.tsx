@@ -1,10 +1,19 @@
 "use client"
 import { useEffect, useState, useCallback } from "react";
-import { useGlobalStore } from "@/context/GlobalStore";
 import { toast } from 'sonner';
-import { ProductItf } from "@/utils/types/ProductItf";
+import { useGlobalStore } from "@/context/GlobalStore"; // IMPORTAÇÃO REAL
+import { ProductItf } from "@/utils/types/ProductItf"; // IMPORTAÇÃO REAL
 import Link from "next/link";
+import Image from "next/image"; // Importando o componente Image do Next.js
 
+// --- REMOVA TODO O BLOCO DE MOCK DATA QUE ESTAVA AQUI ---
+// Interface para um item do carrinho simplificado (apenas o que precisamos para o contador)
+interface CartItemGlobal {
+    productId: string;
+    quantity: number;
+}
+
+// Tipagem dos Itens do Carrinho - MANTENHA ESTA, pois ela é específica para a resposta da sua API do carrinho
 interface CartItemItf {
     id: string;
     quantity: number;
@@ -13,6 +22,12 @@ interface CartItemItf {
     product: ProductItf;
 }
 
+// Tipagem da resposta da API do carrinho - MANTENHA ESTA
+interface CartApiResponse {
+    cartItems: CartItemItf[];
+}
+
+
 export default function CartPage() {
     const { user, setCartItems: setGlobalCartItems, removeFromCartLocal, updateCartItemQuantityLocal, clearCart } = useGlobalStore();
     const [cartItems, setCartItems] = useState<CartItemItf[]>([]);
@@ -20,22 +35,26 @@ export default function CartPage() {
     const [totalPrice, setTotalPrice] = useState(0);
 
     const fetchCartItems = useCallback(async () => {
-        if (!user.id || !user.token) {
+        // Agora verificamos apenas o token, pois o ID do usuário não é mais parte da URL da API do carrinho
+        if (!user.token) {
             setLoading(false);
             return;
         }
 
+        setLoading(true); // Garante que o estado de loading é ativado
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/cart/${user.id}`, {
+            // Rota correta é GET /cart. O backend identifica o utilizador pelo token.
+            const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/cart`, {
                 headers: {
-                    "x-access-token": user.token as string,
+                    "Authorization": `Bearer ${user.token}`,
                 },
             });
 
             if (response.ok) {
-                const data = await response.json();
-                setCartItems(data.cartItems || []);
-                setGlobalCartItems(data.cartItems.map((item: any) => ({ productId: item.productId, quantity: item.quantity })));
+                const data: CartApiResponse = await response.json();
+                const items = data.cartItems || [];
+                setCartItems(items);
+                setGlobalCartItems(items.map(item => ({ productId: item.productId, quantity: item.quantity })));
             } else {
                 toast.error("Erro ao carregar o carrinho.");
                 setCartItems([]);
@@ -43,13 +62,13 @@ export default function CartPage() {
             }
         } catch (error) {
             console.error("Erro ao buscar itens do carrinho:", error);
-            toast.error("Erro de conexão ao carregar o carrinho.");
+            toast.error("Erro de conexão ao carregar o carrinho. Verifique sua API."); // Mensagem mais específica
             setCartItems([]);
             setGlobalCartItems([]);
         } finally {
             setLoading(false);
         }
-    }, [user.id, user.token, setGlobalCartItems]);
+    }, [user.token, setGlobalCartItems]); // Removido user.id das dependências, já que não é usado na URL da API
 
     useEffect(() => {
         fetchCartItems();
@@ -81,7 +100,7 @@ export default function CartPage() {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
-                    "x-access-token": user.token as string,
+                    "Authorization": `Bearer ${user.token}`,
                 },
                 body: JSON.stringify({ quantity: newQuantity }),
             });
@@ -89,7 +108,9 @@ export default function CartPage() {
             if (response.ok) {
                 toast.success("Quantidade atualizada!");
                 setCartItems(prevItems => prevItems.map(item => item.id === cartItemId ? { ...item, quantity: newQuantity } : item));
-                updateCartItemQuantityLocal(itemToUpdate?.productId || '', newQuantity);
+                if (itemToUpdate) {
+                    updateCartItemQuantityLocal(itemToUpdate.productId, newQuantity);
+                }
             } else {
                 const errorData = await response.json();
                 toast.error(errorData.message || "Erro ao atualizar quantidade.");
@@ -105,8 +126,8 @@ export default function CartPage() {
             toast.error("Erro de autenticação. Faça login novamente.");
             return;
         }
-
-        if (!confirm("Tem certeza que deseja remover este item do carrinho?")) {
+        
+        if (!window.confirm("Tem certeza que deseja remover este item do carrinho?")) {
             return;
         }
 
@@ -114,17 +135,17 @@ export default function CartPage() {
             const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/cart/remove/${cartItemId}`, {
                 method: "DELETE",
                 headers: {
-                    "x-access-token": user.token as string,
+                    "Authorization": `Bearer ${user.token}`,
                 },
             });
 
             if (response.ok) {
                 toast.success("Item removido do carrinho!");
-                setCartItems(prevItems => prevItems.filter(item => item.id !== cartItemId));
                 const removedItem = cartItems.find(item => item.id === cartItemId);
                 if (removedItem) {
                     removeFromCartLocal(removedItem.productId);
                 }
+                setCartItems(prevItems => prevItems.filter(item => item.id !== cartItemId));
             } else {
                 const errorData = await response.json();
                 toast.error(errorData.message || "Erro ao remover item.");
@@ -136,7 +157,7 @@ export default function CartPage() {
     };
 
     const handleCheckout = async () => {
-        if (!user.id || !user.token) {
+        if (!user.token) { // Verificando apenas o token, o ID do user deve estar no token para o backend
             toast.error("Você precisa estar logado para finalizar a compra.");
             return;
         }
@@ -145,8 +166,8 @@ export default function CartPage() {
             toast.info("Seu carrinho está vazio.");
             return;
         }
-
-        if (!confirm("Confirma a finalização da compra?")) {
+        
+        if (!window.confirm("Confirma a finalização da compra?")) {
             return;
         }
 
@@ -154,7 +175,7 @@ export default function CartPage() {
             const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/cart/checkout`, {
                 method: "POST",
                 headers: {
-                    "x-access-token": user.token as string,
+                    "Authorization": `Bearer ${user.token}`,
                 },
             });
 
@@ -172,10 +193,10 @@ export default function CartPage() {
         }
     };
 
-
+    // Apenas redireciona se user.id não estiver presente.
+    // Se o user.token não estiver presente (usuário não logado), esta primeira checagem já o levaria ao login.
     if (!user.id) {
         return (
-            // Mensagem para usuário não logado
             <section className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center py-8 px-4">
                 <div className="text-center text-xl text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl max-w-md">
                     <p>Por favor, <Link href="/login" className="text-gray-600 hover:underline dark:text-gray-400">faça login</Link> para ver seu carrinho.</p>
@@ -205,23 +226,22 @@ export default function CartPage() {
     }
 
     return (
-        // Container principal da página com fundo cinza claro para o layout geral
         <section className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-            {/* Card principal do carrinho */}
             <div className="max-w-5xl mx-auto p-4 md:p-8 bg-white dark:bg-gray-800 rounded-xl shadow-2xl space-y-8">
                 <h1 className="text-3xl md:text-4xl font-extrabold text-center text-gray-900 dark:text-white">
-                    🛒 Seu <span className="text-gray-700 dark:text-gray-400">Carrinho de Compras</span> {/* Destaque em cinza */}
+                    🛒 Seu <span className="text-gray-700 dark:text-gray-400">Carrinho de Compras</span>
                 </h1>
 
                 {cartItems.map((item) => (
-                    // Card de cada item do carrinho
                     <div
                         key={item.id}
                         className="flex flex-col md:flex-row items-center gap-4 bg-gray-100 dark:bg-gray-900 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
                     >
-                        <img
+                        <Image // Usando o componente Image do Next.js
                             src={item.product.imageUrl || "/placeholder-image.png"}
                             alt={item.product.name}
+                            width={96} // Ajuste conforme necessário
+                            height={96} // Ajuste conforme necessário
                             className="w-24 h-24 object-cover rounded-md flex-shrink-0"
                         />
 
@@ -272,7 +292,7 @@ export default function CartPage() {
 
                 <div className="flex flex-col sm:flex-row justify-between items-center mt-8 border-t border-gray-200 dark:border-gray-700 pt-6 gap-4">
                     <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                        Total: <span className="text-gray-700 dark:text-gray-400">R$ {totalPrice.toLocaleString("pt-br", { minimumFractionDigits: 2 })}</span> {/* Destaque do total em cinza */}
+                        Total: <span className="text-gray-700 dark:text-gray-400">R$ {totalPrice.toLocaleString("pt-br", { minimumFractionDigits: 2 })}</span>
                     </div>
                     <button
                         onClick={handleCheckout}

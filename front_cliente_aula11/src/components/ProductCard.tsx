@@ -3,6 +3,7 @@ import { ProductItf } from "@/utils/types/ProductItf";
 import Link from "next/link";
 import { toast } from 'sonner';
 import { useGlobalStore } from "@/context/GlobalStore";
+import Image from "next/image"; // Importando o componente Image do Next.js
 
 export function ProductCard({ data }: { data: ProductItf }) {
     const { user, addToCartLocal } = useGlobalStore();
@@ -26,7 +27,7 @@ export function ProductCard({ data }: { data: ProductItf }) {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "x-access-token": user.token
+                    "Authorization": `Bearer ${user.token}` // CORREÇÃO: Usando "Authorization: Bearer"
                 },
                 body: JSON.stringify({
                     productId: data.id,
@@ -61,7 +62,7 @@ export function ProductCard({ data }: { data: ProductItf }) {
             const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/products/${data.id}`, {
                 method: "DELETE",
                 headers: {
-                    "x-access-token": user.token
+                    "Authorization": `Bearer ${user.token}` // CORREÇÃO: Usando "Authorization: Bearer"
                 }
             });
 
@@ -82,7 +83,14 @@ export function ProductCard({ data }: { data: ProductItf }) {
         // Card principal com bordas mais arredondadas e sombra marcante
         <div className="bg-white rounded-xl shadow-lg overflow-hidden transform transition-all duration-300 hover:scale-105 dark:bg-gray-800 dark:border-gray-700 flex flex-col h-full">
             {/* Imagem com bordas arredondadas no topo */}
-            <img className="w-full h-48 object-cover object-center rounded-t-xl" src={data.imageUrl || "/placeholder-image.png"} alt={data.name} />
+            <Image // Usando o componente Image do Next.js
+                className="w-full h-48 object-cover object-center rounded-t-xl"
+                src={data.imageUrl || "/placeholder-image.png"}
+                alt={data.name}
+                width={300} // Largura base para otimização
+                height={200} // Altura base para otimização
+                priority={false} // Defina como true se for uma imagem de destaque na primeira dobra
+            />
             <div className="p-5 flex flex-col flex-grow"> {/* Aumentei o padding interno */}
                 <h5 className="text-xl font-bold text-gray-900 dark:text-white mb-2 leading-tight"> {/* Título mais negrito */}
                     {data.name}
@@ -118,7 +126,7 @@ export function ProductCard({ data }: { data: ProductItf }) {
                         className={`inline-flex items-center justify-center px-4 py-2.5 text-base font-medium text-center text-white rounded-lg focus:ring-4 focus:outline-none transition-colors duration-200 ${
                             data.stock <= 0 || !user.id
                                 ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed' // Cores para desabilitado
-                                : 'bg-gray-700 hover:bg-gray-800 focus:ring-gray-300 dark:bg-gray-700 dark:hover:bg-gray-800 dark:focus:ring-gray-800' // Cores para habilitado
+                                : 'bg-gray-700 hover:bg-gray-800 focus:ring-gray-300 dark:bg-gray-700 dark:hover:bg-gray-800 dark:focus:ring-800' // Cores para habilitado
                         }`}
                     >
                         Adicionar ao Carrinho

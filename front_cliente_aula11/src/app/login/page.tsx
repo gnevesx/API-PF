@@ -5,7 +5,7 @@ import { toast } from "sonner"
 import { useGlobalStore } from "@/context/GlobalStore"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react" // Importe useEffect aqui
 
 type Inputs = {
     email: string
@@ -29,12 +29,20 @@ export default function Login() {
     const { register: registerForgot, handleSubmit: handleSubmitForgot, reset: resetForgot } = useForm<ForgotPasswordInputs>()
     const { register: registerReset, handleSubmit: handleSubmitReset, reset: resetReset } = useForm<ResetPasswordInputs>()
 
-    const { loginUser } = useGlobalStore()
+    const { loginUser, user } = useGlobalStore() // Certifique-se de que 'user' está sendo desestruturado aqui
     const router = useRouter()
 
     const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false)
     const [showResetPasswordModal, setShowResetPasswordModal] = useState(false)
     const [recoveryEmail, setRecoveryEmail] = useState("")
+
+    // NOVO useEffect PARA REDIRECIONAR SE JÁ ESTIVER LOGADO
+    useEffect(() => {
+        if (user.id) { // Se user.id não for undefined, o usuário está logado
+            router.push('/'); // Redireciona para a página inicial
+        }
+    }, [user.id, router]); // Dependências: reage quando user.id ou router mudam
+
 
     async function handleLogin(data: Inputs) {
         try {
@@ -60,14 +68,7 @@ export default function Login() {
                 if (data.keepConnected) {
                     localStorage.setItem("userId", userData.id)
                     localStorage.setItem("userToken", userData.token)
-                } else {
-                    if (localStorage.getItem("userId")) {
-                        localStorage.removeItem("userId")
-                    }
-                    if (localStorage.getItem("userToken")) {
-                        localStorage.removeItem("userToken")
-                    }
-                }
+                } 
 
                 toast.success("Login realizado com sucesso!")
                 router.push("/")

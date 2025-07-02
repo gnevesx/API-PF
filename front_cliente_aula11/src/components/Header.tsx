@@ -2,6 +2,7 @@
 import Link from "next/link"
 import { useGlobalStore } from "@/context/GlobalStore"
 import { useRouter } from "next/navigation"
+import Image from "next/image"; // Importando o componente Image do Next.js
 
 export function Header() {
     const { user, logoutUser, cartItems } = useGlobalStore()
@@ -11,10 +12,13 @@ export function Header() {
 
     function handleLogout() {
         if (confirm("Confirma saída do sistema?")) {
-            logoutUser()
-            localStorage.removeItem("userId")
-            localStorage.removeItem("userToken")
-            router.push("/login")
+            logoutUser() // Limpa o estado e o localStorage
+
+            // Adiciona um pequeno atraso (50 milissegundos) antes de redirecionar.
+            // Isso dá um tempo para o React/Zustand processar a atualização do estado.
+            setTimeout(() => {
+                router.push("/login"); // Redireciona para a página de login
+            }, 50); 
         }
     }
 
@@ -22,7 +26,14 @@ export function Header() {
         <nav className="bg-white shadow-md py-3 px-6 dark:bg-gray-500"> 
             <div className="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto">
                 <Link href="/" className="flex items-center space-x-3 rtl:space-x-reverse">
-                    <img src="/logo2.png" className="h-12" alt="Logo Loja" />
+                    <Image // Usando o componente Image do Next.js
+                        src="/logo2.png"
+                        className="h-12"
+                        alt="Logo Loja"
+                        width={48} // Ajuste conforme o tamanho real do seu logo
+                        height={48} // Ajuste conforme o tamanho real do seu logo
+                        priority // Se o logo for visível na primeira dobra da página
+                    />
                     <span className="self-center text-3xl font-extrabold whitespace-nowrap text-gray-900 dark:text-white"> 
                         Elos
                     </span>

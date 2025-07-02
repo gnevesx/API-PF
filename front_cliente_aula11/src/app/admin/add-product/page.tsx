@@ -5,6 +5,7 @@ import { useGlobalStore } from "@/context/GlobalStore";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+// --- Tipagem dos campos do formulário ---
 type Inputs = {
     name: string;
     description: string;
@@ -16,13 +17,20 @@ type Inputs = {
     stock: number;
 };
 
+// CORREÇÃO: Tipo específico para o erro de validação da API
+type ApiValidationError = {
+    message: string;
+}
+
 export default function AddProductPage() {
     const { user } = useGlobalStore();
     const router = useRouter();
     const { register, handleSubmit, reset, formState: { errors } } = useForm<Inputs>();
+    console.log("Valor de NEXT_PUBLIC_URL_API:", process.env.NEXT_PUBLIC_URL_API); // Este log ainda está aqui para referência
 
+    // Efeito para verificar se o usuário está logado e se é ADMIN
     useEffect(() => {
-        if (!user.id) {
+        if (!user.token) { // Verificar pelo token é mais seguro que pelo id
             router.push('/login');
             toast.warning("Você precisa estar logado para acessar esta página.");
         } else if (user.role !== "ADMIN") {
@@ -39,13 +47,23 @@ export default function AddProductPage() {
         }
 
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/products`, {
+            const requestUrl = `${process.env.NEXT_PUBLIC_URL_API}/products`;
+            // NOVO CONSOLE.LOG ADICIONADO AQUI:
+            console.log("URL de requisição para adicionar produto:", requestUrl); 
+            
+            const response = await fetch(requestUrl, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "x-access-token": user.token
+                    // CORREÇÃO: Enviando o token no formato padrão "Bearer"
+                    "Authorization": `Bearer ${user.token}`
                 },
-                body: JSON.stringify(data)
+                body: JSON.stringify({
+                    ...data,
+                    // Garante que o preço e o estoque sejam enviados como números
+                    price: Number(data.price),
+                    stock: Number(data.stock)
+                })
             });
 
             if (response.ok) {
@@ -53,7 +71,9 @@ export default function AddProductPage() {
                 reset();
             } else {
                 const errorData = await response.json();
-                toast.error(errorData.message || errorData.errors?.map((err: any) => err.message).join('; ') || "Erro ao adicionar produto.");
+                // CORREÇÃO: Removido o 'any' e usando o tipo 'ApiValidationError'
+                const errorMessage = errorData.message || errorData.errors?.map((err: ApiValidationError) => err.message).join('; ') || "Erro ao adicionar produto.";
+                toast.error(errorMessage);
             }
         } catch (error) {
             console.error("Erro na requisição de adicionar produto:", error);
@@ -61,7 +81,8 @@ export default function AddProductPage() {
         }
     };
 
-    if (!user.id || user.role !== "ADMIN") {
+    // Retorna nulo enquanto a verificação do useEffect redireciona o usuário
+    if (!user.token || user.role !== "ADMIN") {
         return null;
     }
 

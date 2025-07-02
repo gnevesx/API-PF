@@ -1,95 +1,122 @@
-// FRONT_CLIENTE_AULA11/context/GlobalStoreInitializer.ts
 "use client"
 
 import { useEffect, useRef } from 'react';
-import { useGlobalStore } from './GlobalStore'; // <-- Caminho e nome da store atualizados
+import { useGlobalStore } from './GlobalStore'; // Importação do useGlobalStore
+import { UserItf } from '@/utils/types/UserItf'; // Importação da tipagem UserItf
+
+// --- Tipagens para as respostas da API ---
+interface UserApiResponse {
+    id: string;
+    name: string;
+    email: string;
+    role: 'ADMIN' | 'VISITOR';
+    createdAt?: string; 
+    updatedAt?: string;
+}
+
+interface CartItemApi {
+    productId: string;
+    quantity: number;
+    // Adicione outras propriedades se a API as retornar e você precisar delas,
+    // como por exemplo: product: ProductItf;
+}
+
+interface CartApiResponse {
+    cartItems: CartItemApi[];
+}
+
 
 export function GlobalStoreInitializer() {
-  const initialized = useRef(false);
-  const loginUser = useGlobalStore((state) => state.loginUser);
-  const setCartItems = useGlobalStore((state) => state.setCartItems);
-  const user = useGlobalStore((state) => state.user);
+    const initialized = useRef(false);
+    const { user, loginUser, setCartItems, logoutUser } = useGlobalStore();
 
-  useEffect(() => {
-    if (!initialized.current) {
-      const storedUserId = localStorage.getItem("userId");
-      const storedUserToken = localStorage.getItem("userToken");
+    useEffect(() => {
+        console.log("Initializer useEffect started. Initialized:", initialized.current, "Current user.id:", user.id); 
 
-      // Tenta fazer auto-login
-      if (storedUserId && storedUserToken && !user.id) {
-        async function autoLoginAndFetchCart() {
-          try {
-            // Primeiro, tenta logar o usuário
-            const userResponse = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/users/${storedUserId}`, {
-              headers: {
-                "Content-Type": "application/json",
-                "x-access-token": storedUserToken as string, // Adicionado 'as string'
-              },
-            });
+        if (initialized.current) return;
+        initialized.current = true;
 
-            if (userResponse.ok) {
-              const userData = await userResponse.json();
-              const userLoggedIn = { ...userData, token: storedUserToken };
-              loginUser(userLoggedIn);
+        const storedUserId = localStorage.getItem("userId"); // Precisamos do ID para esta rota
+        const storedUserToken = localStorage.getItem("userToken");
+        console.log("storedUserToken from localStorage:", storedUserToken); 
 
-              // AGORA, busca o carrinho do usuário logado
-              const cartResponse = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/cart/${userLoggedIn.id}`, {
-                headers: {
-                  "x-access-token": storedUserToken as string, // Adicionado 'as string'
-                },
-              });
-
-              if (cartResponse.ok) {
-                const cartData = await cartResponse.json();
-                setCartItems(cartData.cartItems.map((item: any) => ({ productId: item.productId, quantity: item.quantity })));
-              } else {
-                console.error("Erro ao buscar carrinho no auto-login:", await cartResponse.text());
-                setCartItems([]);
-              }
-            } else {
-              localStorage.removeItem("userId");
-              localStorage.removeItem("userToken");
-              setCartItems([]);
-            }
-          } catch (error) {
-            console.error("Erro no auto-login ou ao buscar carrinho:", error);
-            localStorage.removeItem("userId");
-            localStorage.removeItem("userToken");
-            setCartItems([]);
-          }
+        if (user.id) {
+            console.log("User already in Zustand state. Skipping auto-login.");
+            return;
         }
-        autoLoginAndFetchCart();
-      }
-      initialized.current = true;
-    }
-  }, [loginUser, setCartItems, user.id]);
 
-  // Quando o usuário muda (ex: faz login/logout manualmente), precisamos atualizar o carrinho
-  useEffect(() => {
-    // Apenas faz fetch se o usuário estiver logado e tiver um token válido
-    if (user.id && user.token) { // Verifica user.token também aqui
-        async function fetchCartForLoggedInUser() {
-            try {
-                const cartResponse = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/cart/${user.id}`, {
-                    headers: { "x-access-token": user.token as string }, // Adicionado 'as string'
-                });
-                if (cartResponse.ok) {
-                    const cartData = await cartResponse.json();
-                    setCartItems(cartData.cartItems.map((item: any) => ({ productId: item.productId, quantity: item.quantity })));
-                } else {
-                    console.error("Erro ao buscar carrinho para usuário logado:", await cartResponse.text());
-                    setCartItems([]);
+        if (storedUserId && storedUserToken) { // Verificamos se ambos estão presentes
+            const autoLoginAndFetchCart = async () => {
+                try {
+                    console.log("Attempting auto-login for user ID:", storedUserId, "with token:", storedUserToken); 
+                    // CORREÇÃO: Usando a rota /users/:id para buscar o perfil do usuário
+                    const userResponse = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/users/${storedUserId}`, { 
+                        headers: {
+                            "Authorization": `Bearer ${storedUserToken}`,
+                        },
+                    });
+
+                    console.log("User API response status:", userResponse.status); 
+                    if (userResponse.status === 401 || userResponse.status === 403) {
+                         console.error("Token inválido ou não autorizado. Realizando logout."); 
+                         logoutUser(); 
+                         return;
+                    }
+                    if (!userResponse.ok) {
+                        console.error("Erro ao buscar dados do usuário no auto-login:", userResponse.status, await userResponse.text()); 
+                        logoutUser();
+                        return;
+                    }
+
+                    const userData: UserApiResponse = await userResponse.json();
+                    console.log("User data received from API:", userData); 
+                    
+                    const userToLogin: UserItf = { 
+                        id: userData.id,
+                        name: userData.name,
+                        email: userData.email,
+                        role: userData.role,
+                        token: storedUserToken, 
+                        createdAt: userData.createdAt || new Date().toISOString(),
+                        updatedAt: userData.updatedAt || new Date().toISOString(),
+                    };
+
+                    loginUser(userToLogin); 
+                    console.log("loginUser called. User state updated."); 
+
+                    // Busca o carrinho apenas após o login bem-sucedido
+                    console.log("Attempting to fetch cart for user."); 
+                    const cartResponse = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/cart`, { // Endpoint APENAS /cart
+                        headers: {
+                            "Authorization": `Bearer ${storedUserToken}`,
+                        },
+                    });
+
+                    console.log("Cart API response status:", cartResponse.status); 
+                    if (!cartResponse.ok) {
+                        console.error("Erro ao buscar carrinho no auto-login:", await cartResponse.text()); 
+                        setCartItems([]);
+                    } else {
+                        const cartData: CartApiResponse = await cartResponse.json();
+                        console.log("Cart data received:", cartData); 
+                        setCartItems(cartData.cartItems.map((item: CartItemApi) => ({
+                            productId: item.productId,
+                            quantity: item.quantity
+                        })));
+                    }
+                } catch (error) {
+                    console.error("Erro GERAL no auto-login ou ao buscar carrinho:", error); 
+                    logoutUser();
                 }
-            } catch (error) {
-                console.error("Erro ao buscar carrinho para usuário logado:", error);
-                setCartItems([]);
-            }
+            };
+            autoLoginAndFetchCart();
+        } else {
+            console.log("No storedUserToken or storedUserId found. Ensuring logout state."); 
+            logoutUser();
         }
-        fetchCartForLoggedInUser();
-    } else {
-        setCartItems([]); // Limpa o carrinho se o usuário não está logado ou token é inválido
-    }
-  }, [user.id, user.token, setCartItems]); // user.token como dependência
 
-  return null;
+    }, [loginUser, setCartItems, logoutUser, user.id, user.token]); 
+
+
+    return null; 
 }
