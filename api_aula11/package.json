@@ -1,3 +1,4 @@
+
 {
   "name": "aula2",
   "version": "1.0.0",
@@ -5,7 +6,7 @@
   "scripts": {
     "dev": "set NODE_OPTIONS=--no-warnings --experimental-specifier-resolution=node && node --loader ts-node/esm index.ts",
     "build": "tsc",
-    "start": "node index.js"
+    "start": "node dist/index.js" 
   },
   "keywords": [],
   "author": "",
