@@ -1,19 +1,14 @@
 "use client"
 import { useEffect, useState, useCallback } from "react";
 import { toast } from 'sonner';
-import { useGlobalStore } from "@/context/GlobalStore"; // IMPORTAÇÃO REAL
-import { ProductItf } from "@/utils/types/ProductItf"; // IMPORTAÇÃO REAL
+import { useGlobalStore } from "@/context/GlobalStore"; // Alias de importação
+import { ProductItf } from "@/utils/types/ProductItf"; // Alias de importação
 import Link from "next/link";
-import Image from "next/image"; // Importando o componente Image do Next.js
+import Image from "next/image"; // Importando o componente Image do Next.js para otimização
 
-// --- REMOVA TODO O BLOCO DE MOCK DATA QUE ESTAVA AQUI ---
-// Interface para um item do carrinho simplificado (apenas o que precisamos para o contador)
-interface CartItemGlobal {
-    productId: string;
-    quantity: number;
-}
+// --- CORREÇÃO: REMOVIDA A INTERFACE CartItemGlobal DUPLICADA E NÃO UTILIZADA QUE ESTAVA AQUI ---
 
-// Tipagem dos Itens do Carrinho - MANTENHA ESTA, pois ela é específica para a resposta da sua API do carrinho
+// Tipagem dos Itens do Carrinho (compatível com a API)
 interface CartItemItf {
     id: string;
     quantity: number;
@@ -22,11 +17,10 @@ interface CartItemItf {
     product: ProductItf;
 }
 
-// Tipagem da resposta da API do carrinho - MANTENHA ESTA
+// Tipagem da resposta da API do carrinho
 interface CartApiResponse {
     cartItems: CartItemItf[];
 }
-
 
 export default function CartPage() {
     const { user, setCartItems: setGlobalCartItems, removeFromCartLocal, updateCartItemQuantityLocal, clearCart } = useGlobalStore();
@@ -35,15 +29,13 @@ export default function CartPage() {
     const [totalPrice, setTotalPrice] = useState(0);
 
     const fetchCartItems = useCallback(async () => {
-        // Agora verificamos apenas o token, pois o ID do usuário não é mais parte da URL da API do carrinho
         if (!user.token) {
             setLoading(false);
             return;
         }
 
-        setLoading(true); // Garante que o estado de loading é ativado
+        setLoading(true);
         try {
-            // Rota correta é GET /cart. O backend identifica o utilizador pelo token.
             const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/cart`, {
                 headers: {
                     "Authorization": `Bearer ${user.token}`,
@@ -60,15 +52,15 @@ export default function CartPage() {
                 setCartItems([]);
                 setGlobalCartItems([]);
             }
-        } catch (error) {
+        } catch (error) { // Usando 'error' como tipo 'any' ou 'unknown' é permitido
             console.error("Erro ao buscar itens do carrinho:", error);
-            toast.error("Erro de conexão ao carregar o carrinho. Verifique sua API."); // Mensagem mais específica
+            toast.error("Erro de conexão ao carregar o carrinho. Verifique sua API.");
             setCartItems([]);
             setGlobalCartItems([]);
         } finally {
             setLoading(false);
         }
-    }, [user.token, setGlobalCartItems]); // Removido user.id das dependências, já que não é usado na URL da API
+    }, [user.token, setGlobalCartItems]);
 
     useEffect(() => {
         fetchCartItems();
@@ -157,7 +149,7 @@ export default function CartPage() {
     };
 
     const handleCheckout = async () => {
-        if (!user.token) { // Verificando apenas o token, o ID do user deve estar no token para o backend
+        if (!user.token) {
             toast.error("Você precisa estar logado para finalizar a compra.");
             return;
         }
@@ -193,8 +185,7 @@ export default function CartPage() {
         }
     };
 
-    // Apenas redireciona se user.id não estiver presente.
-    // Se o user.token não estiver presente (usuário não logado), esta primeira checagem já o levaria ao login.
+
     if (!user.id) {
         return (
             <section className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center py-8 px-4">

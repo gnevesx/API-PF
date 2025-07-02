@@ -1,19 +1,17 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-// CORREÇÃO: Alterados os caminhos de importação para relativos para resolver o erro de compilação.
-import { ProductItf } from "../utils/types/ProductItf";
-import { useGlobalStore } from "../context/GlobalStore";
-import { InputPesquisa } from "../components/InputPesquisa";
-import { ProductCard } from "../components/ProductCard";
+import { ProductItf } from "@/utils/types/ProductItf"; // Alias de importação
+import { useGlobalStore } from "@/context/GlobalStore"; // Alias de importação
+import { InputPesquisa } from "@/components/InputPesquisa"; // Alias de importação
+import { ProductCard } from "@/components/ProductCard"; // Alias de importação
 
 export default function Home() {
     const [products, setProducts] = useState<ProductItf[]>([]);
-    // Estados para uma melhor experiência do usuário
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
-    const { user, loginUser } = useGlobalStore();
+    const { user } = useGlobalStore(); // 'loginUser' não é usado aqui, então removido da desestruturação
 
     // Buscar produtos
     const fetchProducts = useCallback(async () => {
@@ -26,49 +24,21 @@ export default function Home() {
             }
             const data = await response.json();
             setProducts(data);
-        } catch (err: any) {
+        } catch (err: unknown) { // CORREÇÃO: Altera 'any' para 'unknown'
             console.error("Erro ao buscar produtos:", err);
             setError("Não foi possível carregar os produtos. Tente novamente mais tarde.");
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, []); // Dependência vazia: esta função só precisa ser criada uma vez
 
-    // Auto login
+    // Efeito para chamar fetchProducts na montagem do componente
     useEffect(() => {
         fetchProducts();
+    }, [fetchProducts]); // Dependência: só roda quando fetchProducts muda (o que não acontece, por ser useCallback com dep. vazia)
 
-        async function autoLoginUser() {
-            const storedUserId = localStorage.getItem("userId");
-            const storedUserToken = localStorage.getItem("userToken");
-
-            if (storedUserId && storedUserToken && !user.id) {
-                try {
-                    const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/users/${storedUserId}`, {
-                        headers: {
-                            "Content-Type": "application/json",
-                            "Authorization": `Bearer ${storedUserToken}`,
-                        },
-                    });
-
-                    if (response.ok) {
-                        const userData = await response.json();
-                        loginUser({ ...userData, token: storedUserToken });
-                    } else {
-                        // Se o token for inválido, limpa o localStorage
-                        localStorage.removeItem("userId");
-                        localStorage.removeItem("userToken");
-                    }
-                } catch (error) {
-                    console.error("Erro no auto-login:", error);
-                    localStorage.removeItem("userId");
-                    localStorage.removeItem("userToken");
-                }
-            }
-        }
-
-        autoLoginUser();
-    }, [fetchProducts, user.id, loginUser]);
+    // REMOVIDO: Todo o bloco useEffect que continha a lógica de auto-login (autoLoginUser).
+    // Essa lógica já é cuidada pelo GlobalStoreInitializer (que está no seu layout.tsx).
 
     return (
         <>

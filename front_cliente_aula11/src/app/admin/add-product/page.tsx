@@ -1,198 +1,191 @@
 "use client"
-import { useForm } from "react-hook-form";
+import { ProductItf } from "@/utils/types/ProductItf";
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { toast } from 'sonner';
 import { useGlobalStore } from "@/context/GlobalStore";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import Link from "next/link"; // Certifique-se que este import existe
+import Image from "next/image"; // Importando o componente Image do Next.js
 
-// --- Tipagem dos campos do formulário ---
-type Inputs = {
-    name: string;
-    description: string;
-    price: number;
-    imageUrl: string;
-    category: string;
-    size: string;
-    color: string;
-    stock: number;
-};
-
-// CORREÇÃO: Tipo específico para o erro de validação da API
-type ApiValidationError = {
+// --- Tipagem para a resposta de erro da API ---
+type ApiError = {
     message: string;
 }
 
-export default function AddProductPage() {
-    const { user } = useGlobalStore();
-    const router = useRouter();
-    const { register, handleSubmit, reset, formState: { errors } } = useForm<Inputs>();
-    console.log("Valor de NEXT_PUBLIC_URL_API:", process.env.NEXT_PUBLIC_URL_API); // Este log ainda está aqui para referência
+export default function ProductDetails() {
+    const params = useParams();
+    const productId = params.product_id as string;
 
-    // Efeito para verificar se o usuário está logado e se é ADMIN
+    const [product, setProduct] = useState<ProductItf | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [quantityToAdd, setQuantityToAdd] = useState(1);
+
+    const { user, addToCartLocal } = useGlobalStore();
+
     useEffect(() => {
-        if (!user.token) { // Verificar pelo token é mais seguro que pelo id
-            router.push('/login');
-            toast.warning("Você precisa estar logado para acessar esta página.");
-        } else if (user.role !== "ADMIN") {
-            router.push('/');
-            toast.error("Acesso negado: Você não tem permissão para adicionar produtos.");
+        async function fetchProductDetails() {
+            try {
+                const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/products/${productId}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data: ProductItf = await response.json();
+                setProduct(data);
+                if (data.stock > 0) {
+                    setQuantityToAdd(1);
+                } else {
+                    setQuantityToAdd(0);
+                }
+            } catch (err: unknown) { // Usando 'unknown' em vez de 'any' para o erro
+                console.error("Erro ao buscar detalhes do produto:", err);
+                setError("Não foi possível carregar os detalhes do produto.");
+            } finally {
+                setLoading(false);
+            }
         }
-    }, [user, router]);
+        if (productId) {
+            fetchProductDetails();
+        }
+    }, [productId]);
 
-
-    const onSubmit = async (data: Inputs) => {
+    async function handleAddToCart() {
+        if (!user.id) {
+            toast.info("Você precisa estar logado para adicionar itens ao carrinho.");
+            return;
+        }
         if (!user.token) {
-            toast.error("Erro de autenticação. Faça login novamente.");
+            toast.error("Erro de autenticação. Por favor, faça login novamente.");
+            return;
+        }
+        if (!product || product.stock <= 0) {
+            toast.error("Produto esgotado ou não disponível!");
+            return;
+        }
+        if (quantityToAdd <= 0) {
+            toast.error("A quantidade deve ser pelo menos 1.");
+            return;
+        }
+        if (product.stock < quantityToAdd) {
+            toast.error(`Estoque insuficiente. Disponível: ${product.stock}`);
             return;
         }
 
         try {
-            const requestUrl = `${process.env.NEXT_PUBLIC_URL_API}/products`;
-            // NOVO CONSOLE.LOG ADICIONADO AQUI:
-            console.log("URL de requisição para adicionar produto:", requestUrl); 
-            
-            const response = await fetch(requestUrl, {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/cart/add`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    // CORREÇÃO: Enviando o token no formato padrão "Bearer"
                     "Authorization": `Bearer ${user.token}`
                 },
                 body: JSON.stringify({
-                    ...data,
-                    // Garante que o preço e o estoque sejam enviados como números
-                    price: Number(data.price),
-                    stock: Number(data.stock)
+                    productId: product.id,
+                    quantity: quantityToAdd
                 })
             });
 
             if (response.ok) {
-                toast.success("Produto adicionado com sucesso!");
-                reset();
+                toast.success(`${quantityToAdd}x ${product.name} adicionado(s) ao carrinho!`);
+                addToCartLocal(product.id, quantityToAdd);
+                setProduct(prev => prev ? { ...prev, stock: prev.stock - quantityToAdd } : null);
             } else {
-                const errorData = await response.json();
-                // CORREÇÃO: Removido o 'any' e usando o tipo 'ApiValidationError'
-                const errorMessage = errorData.message || errorData.errors?.map((err: ApiValidationError) => err.message).join('; ') || "Erro ao adicionar produto.";
-                toast.error(errorMessage);
+                const errorData: ApiError = await response.json();
+                toast.error(errorData.message || "Erro ao adicionar produto ao carrinho.");
             }
         } catch (error) {
-            console.error("Erro na requisição de adicionar produto:", error);
-            toast.error("Erro de conexão. Tente novamente mais tarde.");
+            console.error("Erro na requisição de adicionar ao carrinho:", error);
+            toast.error("Erro ao adicionar produto ao carrinho. Tente novamente mais tarde.");
         }
-    };
+    }
 
-    // Retorna nulo enquanto a verificação do useEffect redireciona o usuário
-    if (!user.token || user.role !== "ADMIN") {
-        return null;
+    if (loading) {
+        return <div className="min-h-screen flex items-center justify-center text-center text-xl text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900">Carregando detalhes do produto...</div>;
+    }
+
+    if (error) {
+        return <div className="min-h-screen flex items-center justify-center text-center text-xl text-red-500 bg-gray-50 dark:bg-gray-900">{error}</div>;
+    }
+
+    if (!product) {
+        return <div className="min-h-screen flex items-center justify-center text-center text-xl text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900">Produto não encontrado.</div>;
     }
 
     return (
-        // Container principal da página com fundo cinza claro para o layout geral
-        <section className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center py-8 px-4">
-            {/* Card do formulário com fundo branco/cinza escuro, sombra e bordas arredondadas */}
-            <div className="max-w-2xl w-full mx-auto p-6 bg-white rounded-lg shadow-xl dark:bg-gray-800">
-                <h1 className="mb-8 text-3xl font-extrabold leading-none tracking-tight text-gray-900 dark:text-white text-center">
-                    Adicionar <span className="underline decoration-gray-600 dark:decoration-gray-400">Novo Produto</span> {/* Sublinhado em cinza */}
-                </h1>
-
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-6"> {/* Espaçamento maior entre os campos */}
+        <section className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
+            <div className="max-w-6xl w-full mx-auto p-8 bg-white rounded-2xl shadow-2xl dark:bg-gray-800 flex flex-col md:flex-row gap-10">
+                <div className="md:w-1/2 flex-shrink-0">
+                    {/* CORREÇÃO: Usando o componente Image do Next.js para otimização */}
+                    <Image
+                        className="w-full h-auto object-cover rounded-xl shadow-lg transform hover:scale-105 transition-transform duration-300"
+                        src={product.imageUrl || "/placeholder-image.png"}
+                        alt={product.name}
+                        width={600} // Ajuste conforme necessário
+                        height={600} // Ajuste conforme necessário
+                        priority // Opcional: Prioriza o carregamento da imagem principal da página
+                    />
+                </div>
+                <div className="md:w-1/2 flex flex-col justify-between">
                     <div>
-                        <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nome do Produto</label>
-                        <input
-                            type="text"
-                            id="name"
-                            {...register("name", { required: "Nome é obrigatório", minLength: { value: 3, message: "Mínimo 3 caracteres" } })}
-                            className="w-full p-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors" /* Foco em cinza */
-                        />
-                        {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
+                        <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900 dark:text-white mb-4 leading-tight">
+                            {product.name}
+                        </h1>
+                        <p className="text-lg text-gray-700 dark:text-gray-300 mb-6 border-b border-gray-200 dark:border-gray-700 pb-6">
+                            {product.description || "Nenhuma descrição disponível."}
+                        </p>
+                        <div className="text-gray-600 dark:text-gray-400 text-base space-y-2">
+                            <p><strong className="font-semibold text-gray-800 dark:text-gray-200">Categoria:</strong> {product.category || 'N/A'}</p>
+                            <p><strong className="font-semibold text-gray-800 dark:text-gray-200">Tamanho:</strong> {product.size || 'N/A'}</p>
+                            <p><strong className="font-semibold text-gray-800 dark:text-gray-200">Cor:</strong> {product.color || 'N/A'}</p>
+                            <p><strong className="font-semibold text-gray-800 dark:text-gray-200">Estoque:</strong> {product.stock}</p>
+                        </div>
                     </div>
+                    <div className="mt-8">
+                        <h2 className="text-4xl font-bold text-gray-700 dark:text-gray-400 mb-6">
+                            R$ {Number(product.price).toLocaleString("pt-br", { minimumFractionDigits: 2 })}
+                        </h2>
 
-                    <div>
-                        <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descrição</label>
-                        <textarea
-                            id="description"
-                            {...register("description", { required: "Descrição é obrigatória", minLength: { value: 10, message: "Mínimo 10 caracteres" } })}
-                            rows={4}
-                            className="w-full p-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors" /* Foco em cinza */
-                        ></textarea>
-                        {errors.description && <p className="text-red-500 text-xs mt-1">{errors.description.message}</p>}
+                        {user.id ? (
+                            <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4 mt-4">
+                                <label htmlFor="quantityInput" className="text-lg font-medium text-gray-900 dark:text-white">Quantidade:</label>
+                                <input
+                                    type="number"
+                                    id="quantityInput"
+                                    min="1"
+                                    max={product.stock > 0 ? product.stock : 1}
+                                    value={quantityToAdd}
+                                    onChange={(e) => {
+                                        const value = parseInt(e.target.value, 10);
+                                        if (isNaN(value)) setQuantityToAdd(1);
+                                        else if (value > product.stock) setQuantityToAdd(product.stock);
+                                        else if (value < 1) setQuantityToAdd(1);
+                                        else setQuantityToAdd(value);
+                                    }}
+                                    className="w-full sm:w-28 p-3 border border-gray-300 rounded-lg text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white focus:ring-gray-500 focus:border-gray-500 transition-colors"
+                                />
+                                <button
+                                    onClick={handleAddToCart}
+                                    disabled={product.stock <= 0 || quantityToAdd <= 0}
+                                    className={`inline-flex items-center justify-center w-full sm:w-auto px-8 py-3 text-lg font-semibold text-center text-white rounded-lg focus:ring-4 focus:outline-none transition-all duration-300 transform hover:-translate-y-0.5 ${product.stock <= 0 || quantityToAdd <= 0
+                                        ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
+                                        : 'bg-gray-700 hover:bg-gray-800 focus:ring-gray-300 dark:bg-gray-700 dark:hover:bg-gray-800 dark:focus:ring-gray-800'
+                                    }`}
+                                >
+                                    Adicionar ao Carrinho
+                                    <svg className="w-6 h-6 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                                </button>
+                            </div>
+                        ) : (
+                            <h2 className="text-xl text-gray-900 dark:text-white mt-6">
+                                {/* CORREÇÃO: Usando <Link /> do Next.js */}
+                                <Link href="/login" className="text-gray-700 hover:underline dark:text-gray-400">Faça login</Link> para adicionar ao carrinho!
+                            </h2>
+                        )}
+                        {/* CORREÇÃO: Usando <Link /> do Next.js */}
+                        <Link href="/" className="mt-8 inline-block text-gray-700 hover:underline dark:text-gray-400 text-lg font-medium">
+                            &larr; Voltar para a Loja
+                        </Link>
                     </div>
-
-                    <div>
-                        <label htmlFor="price" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preço (R$)</label>
-                        <input
-                            type="number"
-                            id="price"
-                            step="0.01"
-                            {...register("price", { required: "Preço é obrigatório", min: { value: 0.01, message: "Preço deve ser maior que zero" }, valueAsNumber: true })}
-                            className="w-full p-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors" /* Foco em cinza */
-                        />
-                        {errors.price && <p className="text-red-500 text-xs mt-1">{errors.price.message}</p>}
-                    </div>
-
-                    <div>
-                        <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">URL da Imagem</label>
-                        <input
-                            type="text"
-                            id="imageUrl"
-                            {...register("imageUrl", { required: "URL da imagem é obrigatória" })}
-                            className="w-full p-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors" /* Foco em cinza */
-                            placeholder="Ex: https://seusite.com/imagem.jpg"
-                        />
-                        {errors.imageUrl && <p className="text-red-500 text-xs mt-1">{errors.imageUrl.message}</p>}
-                    </div>
-
-                    <div>
-                        <label htmlFor="category" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Categoria</label>
-                        <input
-                            type="text"
-                            id="category"
-                            {...register("category")}
-                            className="w-full p-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors" /* Foco em cinza */
-                            placeholder="Ex: Camisetas, Calças, Acessórios"
-                        />
-                    </div>
-
-                    <div>
-                        <label htmlFor="size" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tamanho</label>
-                        <input
-                            type="text"
-                            id="size"
-                            {...register("size")}
-                            className="w-full p-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors" /* Foco em cinza */
-                            placeholder="Ex: P, M, G, Único"
-                        />
-                    </div>
-
-                    <div>
-                        <label htmlFor="color" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cor</label>
-                        <input
-                            type="text"
-                            id="color"
-                            {...register("color")}
-                            className="w-full p-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors" /* Foco em cinza */
-                            placeholder="Ex: Azul, Preto, Branco"
-                        />
-                    </div>
-
-                    <div>
-                        <label htmlFor="stock" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estoque</label>
-                        <input
-                            type="number"
-                            id="stock"
-                            {...register("stock", { required: "Estoque é obrigatório", min: { value: 0, message: "Estoque não pode ser negativo" }, valueAsNumber: true })}
-                            className="w-full p-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-gray-500 focus:border-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors" /* Foco em cinza */
-                        />
-                        {errors.stock && <p className="text-red-500 text-xs mt-1">{errors.stock.message}</p>}
-                    </div>
-
-                    <button
-                        type="submit"
-                        className="w-full py-3 px-6 border border-transparent rounded-lg shadow-sm text-lg font-medium text-white bg-gray-700 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors" /* Botão em cinza */
-                    >
-                        Adicionar Produto
-                    </button>
-                </form>
+                </div>
             </div>
         </section>
     );
