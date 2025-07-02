@@ -27,7 +27,7 @@ export function ProductCard({ data }: { data: ProductItf }) {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${user.token}` // CORREÇÃO: Usando "Authorization: Bearer"
+                    "Authorization": `Bearer ${user.token}` 
                 },
                 body: JSON.stringify({
                     productId: data.id,
@@ -62,13 +62,15 @@ export function ProductCard({ data }: { data: ProductItf }) {
             const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/products/${data.id}`, {
                 method: "DELETE",
                 headers: {
-                    "Authorization": `Bearer ${user.token}` // CORREÇÃO: Usando "Authorization: Bearer"
+                    "Authorization": `Bearer ${user.token}` 
                 }
             });
 
             if (response.ok) {
                 toast.success(`Produto "${data.name}" deletado com sucesso!`);
-                window.location.reload(); // Recarrega a página para atualizar a lista
+                // *** CORREÇÃO AQUI: LINHA window.location.reload() REMOVIDA! ***
+                // Em vez de recarregar, podemos adicionar uma mensagem ou atualizar o estado do pai
+                toast.info("O produto foi deletado. Por favor, recarregue a página para ver a lista atualizada."); 
             } else {
                 const errorData = await response.json();
                 toast.error(errorData.message || "Erro ao deletar produto.");
