@@ -11,7 +11,9 @@ export default function Home() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
-    const { user } = useGlobalStore(); // 'loginUser' não é usado aqui, então removido da desestruturação
+    // CORREÇÃO: Removido 'user' da desestruturação, pois não é usado diretamente aqui.
+    // A lógica de login é tratada pelo GlobalStoreInitializer.
+    const globalStore = useGlobalStore(); 
 
     // Buscar produtos
     const fetchProducts = useCallback(async () => {
@@ -30,15 +32,12 @@ export default function Home() {
         } finally {
             setIsLoading(false);
         }
-    }, []); // Dependência vazia: esta função só precisa ser criada uma vez
+    }, []); 
 
     // Efeito para chamar fetchProducts na montagem do componente
     useEffect(() => {
         fetchProducts();
-    }, [fetchProducts]); // Dependência: só roda quando fetchProducts muda (o que não acontece, por ser useCallback com dep. vazia)
-
-    // REMOVIDO: Todo o bloco useEffect que continha a lógica de auto-login (autoLoginUser).
-    // Essa lógica já é cuidada pelo GlobalStoreInitializer (que está no seu layout.tsx).
+    }, [fetchProducts]); 
 
     return (
         <>

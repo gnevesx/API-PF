@@ -1,12 +1,11 @@
 "use client"
-// CORREÇÃO: Imports do Next.js removidos para evitar erros de compilação no ambiente.
-// A lógica será adaptada para usar APIs padrão do navegador.
+import { ProductItf } from "@/utils/types/ProductItf";
+import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from 'sonner';
-
-// CORREÇÃO: Alterados os caminhos de importação para relativos corretos.
-import { ProductItf } from "../../../utils/types/ProductItf";
-import { useGlobalStore } from "../../../context/GlobalStore";
+import { useGlobalStore } from "@/context/GlobalStore";
+import Link from "next/link"; // Certifique-se que este import existe
+import Image from "next/image"; // Importando o componente Image do Next.js
 
 // --- Tipagem para a resposta de erro da API ---
 type ApiError = {
@@ -14,9 +13,9 @@ type ApiError = {
 }
 
 export default function ProductDetails() {
-    // CORREÇÃO: Lógica para extrair o ID do produto da URL sem o hook useParams.
-    const [productId, setProductId] = useState<string | null>(null);
-    
+    const params = useParams();
+    const productId = params.product_id as string;
+
     const [product, setProduct] = useState<ProductItf | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -25,22 +24,8 @@ export default function ProductDetails() {
     const { user, addToCartLocal } = useGlobalStore();
 
     useEffect(() => {
-        // Extrai o ID da URL quando o componente é montado no cliente.
-        const pathSegments = window.location.pathname.split('/');
-        const id = pathSegments[pathSegments.length - 1];
-        if (id) {
-            setProductId(id);
-        }
-    }, []);
-
-    useEffect(() => {
         async function fetchProductDetails() {
-            if (!productId) return; // Não faz a busca se o ID ainda não foi extraído.
-
-            setLoading(true);
-            setError(null);
             try {
-                // CORREÇÃO: Padronizada a variável de ambiente.
                 const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/products/${productId}`);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -52,15 +37,16 @@ export default function ProductDetails() {
                 } else {
                     setQuantityToAdd(0);
                 }
-            } catch (err: unknown) {
+            } catch (err: unknown) { // Usando 'unknown' em vez de 'any' para o erro
                 console.error("Erro ao buscar detalhes do produto:", err);
                 setError("Não foi possível carregar os detalhes do produto.");
             } finally {
                 setLoading(false);
             }
         }
-        
-        fetchProductDetails();
+        if (productId) {
+            fetchProductDetails();
+        }
     }, [productId]);
 
     async function handleAddToCart() {
@@ -128,11 +114,14 @@ export default function ProductDetails() {
         <section className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
             <div className="max-w-6xl w-full mx-auto p-8 bg-white rounded-2xl shadow-2xl dark:bg-gray-800 flex flex-col md:flex-row gap-10">
                 <div className="md:w-1/2 flex-shrink-0">
-                    {/* CORREÇÃO: Usando a tag 'img' padrão para evitar erros de compilação. */}
-                    <img
+                    {/* CORREÇÃO: Usando o componente Image do Next.js para otimização */}
+                    <Image
                         className="w-full h-auto object-cover rounded-xl shadow-lg transform hover:scale-105 transition-transform duration-300"
                         src={product.imageUrl || "/placeholder-image.png"}
                         alt={product.name}
+                        width={600} // Ajuste conforme necessário
+                        height={600} // Ajuste conforme necessário
+                        priority // Opcional: Prioriza o carregamento da imagem principal da página
                     />
                 </div>
                 <div className="md:w-1/2 flex flex-col justify-between">
@@ -187,14 +176,14 @@ export default function ProductDetails() {
                             </div>
                         ) : (
                             <h2 className="text-xl text-gray-900 dark:text-white mt-6">
-                                {/* CORREÇÃO: Usando a tag 'a' padrão */}
-                                <a href="/login" className="text-gray-700 hover:underline dark:text-gray-400">Faça login</a> para adicionar ao carrinho!
+                                {/* CORREÇÃO: Usando <Link /> do Next.js */}
+                                <Link href="/login" className="text-gray-700 hover:underline dark:text-gray-400">Faça login</Link> para adicionar ao carrinho!
                             </h2>
                         )}
-                        {/* CORREÇÃO: Usando a tag 'a' padrão */}
-                        <a href="/" className="mt-8 inline-block text-gray-700 hover:underline dark:text-gray-400 text-lg font-medium">
+                        {/* CORREÇÃO: Usando <Link /> do Next.js */}
+                        <Link href="/" className="mt-8 inline-block text-gray-700 hover:underline dark:text-gray-400 text-lg font-medium">
                             &larr; Voltar para a Loja
-                        </a>
+                        </Link>
                     </div>
                 </div>
             </div>
