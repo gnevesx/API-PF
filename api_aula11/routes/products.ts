@@ -1,40 +1,19 @@
-// API_AULA11/routes/products.ts
+// routes/products.ts
 
 import { Role } from '@prisma/client';
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import jwt from "jsonwebtoken";
-import prisma from '../prisma/client.js'; // <-- Importação do cliente Prisma centralizado
+import prisma from '../prisma/client.js';
+
+// 1. Importando os middlewares centralizados e corretos
+import { verificarToken } from '../middlewares/auth.js';
+import { verificarAdmin } from '../middlewares/adminAuth.js';
 
 const router = Router();
 
-// Middleware de autenticação
-const verifyToken = (req: any, res: any, next: any) => {
-  const token = req.headers['x-access-token'];
+// 2. Middlewares locais foram REMOVIDOS
 
-  if (!token) {
-    return res.status(403).json({ message: "Token não fornecido" });
-  }
-
-  try {
-    const decoded = jwt.verify(token as string, process.env.JWT_KEY as string) as { userId: string, userRole: Role };
-    req.userId = decoded.userId;
-    req.userRole = decoded.userRole;
-    next();
-  } catch (error) {
-    return res.status(401).json({ message: "Token inválido" });
-  }
-};
-
-// Middleware para verificar se o usuário é ADMIN
-const verifyAdmin = (req: any, res: any, next: any) => {
-  if (req.userRole !== Role.ADMIN) {
-    return res.status(403).json({ message: "Acesso negado: Requer privilégios de administrador para esta operação." });
-  }
-  next();
-};
-
-// Schema para CRIAÇÃO de produto (todos os campos obrigatórios, exceto opcionais explícitos)
+// Schema para CRIAÇÃO de produto
 const productSchema = z.object({
   name: z.string().min(3, { message: "Nome do produto deve possuir, no mínimo, 3 caracteres" }),
   description: z.string().min(10, { message: "Descrição do produto deve possuir, no mínimo, 10 caracteres" }).optional().nullable(),
@@ -46,7 +25,7 @@ const productSchema = z.object({
   stock: z.number().int().min(0, { message: "Estoque deve ser um número inteiro não negativo" }).optional().default(0),
 });
 
-// NOVO SCHEMA PARA ATUALIZAÇÃO: Todos os campos são opcionais (.optional())
+// SCHEMA PARA ATUALIZAÇÃO
 const productUpdateSchema = z.object({
   name: z.string().min(3, { message: "Nome do produto deve possuir, no mínimo, 3 caracteres" }).optional(),
   description: z.string().min(10, { message: "Descrição do produto deve possuir, no mínimo, 10 caracteres" }).optional().nullable(),
@@ -59,8 +38,8 @@ const productUpdateSchema = z.object({
 });
 
 
-// Rota: GET /products (Listar todos os produtos)
-router.get("/", async (req, res) => {
+// Rota: GET /products (Listar todos os produtos - Pública)
+router.get("/", async (req: Request, res: Response) => {
   try {
     const products = await prisma.product.findMany();
     res.status(200).json(products);
@@ -70,9 +49,9 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Rota: GET /products/:id (Buscar produto por ID)
-router.get("/:id", async (req, res) => {
-  const { id } = req.params;
+// Rota: GET /products/:id (Buscar produto por ID - Pública)
+router.get("/:id", async (req: Request, res: Response) => {
+  const { id } = req.params; // ID é uma string (UUID)
   try {
     const product = await prisma.product.findUnique({
       where: { id }
@@ -88,26 +67,16 @@ router.get("/:id", async (req, res) => {
 });
 
 // Rota: POST /products (Criar novo produto - Apenas ADMIN)
-router.post("/", verifyToken, verifyAdmin, async (req, res) => {
+// 3. Aplicando os middlewares importados
+router.post("/", verificarToken, verificarAdmin, async (req: Request, res: Response) => {
   const validation = productSchema.safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({ errors: validation.error.issues });
   }
 
-  const { name, description, price, imageUrl, category, size, color, stock } = validation.data;
-
   try {
     const newProduct = await prisma.product.create({
-      data: {
-        name,
-        description,
-        price,
-        imageUrl,
-        category,
-        size,
-        color,
-        stock,
-      }
+      data: validation.data
     });
     res.status(201).json(newProduct);
   } catch (error) {
@@ -117,9 +86,8 @@ router.post("/", verifyToken, verifyAdmin, async (req, res) => {
 });
 
 // Rota: PUT /products/:id (Atualizar produto - Apenas ADMIN)
-router.put("/:id", verifyToken, verifyAdmin, async (req, res) => {
+router.put("/:id", verificarToken, verificarAdmin, async (req: Request, res: Response) => {
   const { id } = req.params;
-  // MUDANÇA AQUI: Usa productUpdateSchema
   const validation = productUpdateSchema.safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({ errors: validation.error.issues });
@@ -128,7 +96,7 @@ router.put("/:id", verifyToken, verifyAdmin, async (req, res) => {
   try {
     const updatedProduct = await prisma.product.update({
       where: { id },
-      data: validation.data // validation.data conterá apenas os campos fornecidos
+      data: validation.data
     });
     res.status(200).json(updatedProduct);
   } catch (error) {
@@ -138,7 +106,7 @@ router.put("/:id", verifyToken, verifyAdmin, async (req, res) => {
 });
 
 // Rota: DELETE /products/:id (Deletar produto - Apenas ADMIN)
-router.delete("/:id", verifyToken, verifyAdmin, async (req, res) => {
+router.delete("/:id", verificarToken, verificarAdmin, async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
     const deletedProduct = await prisma.product.delete({
@@ -151,8 +119,8 @@ router.delete("/:id", verifyToken, verifyAdmin, async (req, res) => {
   }
 });
 
-// Rota: GET /products/search/:term (Pesquisa de produtos)
-router.get("/search/:term", async (req, res) => {
+// Rota: GET /products/search/:term (Pesquisa de produtos - Pública)
+router.get("/search/:term", async (req: Request, res: Response) => {
   const { term } = req.params;
 
   try {
@@ -163,7 +131,6 @@ router.get("/search/:term", async (req, res) => {
           { description: { contains: term, mode: "insensitive" } },
           { category: { contains: term, mode: "insensitive" } },
           { color: { contains: term, mode: "insensitive" } },
-          // Adicione mais campos para pesquisa se desejar
         ]
       }
     });

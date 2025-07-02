@@ -1,29 +1,17 @@
+// routes/cart.ts
+
 import { Role } from '@prisma/client';
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import jwt from "jsonwebtoken";
-import prisma from '../prisma/client.js'; // <-- Importação do cliente Prisma centralizado
+import prisma from '../prisma/client.js';
+
+// Importando os middlewares centralizados
+import { verificarToken } from '../middlewares/auth.js';
+import { verificarAdmin } from '../middlewares/adminAuth.js';
 
 const router = Router();
 
-// Middleware de autenticação (copiado para consistência, mas idealmente centralizado)
-const verifyToken = (req: any, res: any, next: any) => {
-  const token = req.headers['x-access-token'];
-
-  if (!token) {
-    return res.status(403).json({ message: "Token não fornecido" });
-  }
-
-  try {
-    const decoded = jwt.verify(token as string, process.env.JWT_KEY as string) as { userId: string, userRole: Role };
-    req.userId = decoded.userId;
-    req.userRole = decoded.userRole;
-    next();
-  } catch (error) {
-    return res.status(401).json({ message: "Token inválido" });
-  }
-};
-
+// --- ZOD SCHEMAS ---
 const addToCartSchema = z.object({
   productId: z.string().uuid({ message: "ID do produto inválido" }),
   quantity: z.number().int().min(1, { message: "Quantidade deve ser pelo menos 1" }),
@@ -33,13 +21,15 @@ const updateCartItemSchema = z.object({
   quantity: z.number().int().min(1, { message: "Quantidade deve ser pelo menos 1" }),
 });
 
-// Rota: GET /cart/:userId (Obter o carrinho de um usuário)
-// O próprio usuário ou um ADMIN pode ver o carrinho
-router.get("/:userId", verifyToken, async (req: any, res) => {
-  const { userId } = req.params;
+// --- ROTAS ---
 
-  if (req.userRole !== Role.ADMIN && req.userId !== userId) {
-    return res.status(403).json({ message: "Acesso negado: Você só pode visualizar seu próprio carrinho." });
+// Rota: GET /cart (Obter o carrinho do usuário autenticado)
+router.get("/", verificarToken, async (req: Request, res: Response) => {
+  // O ID do usuário vem do token, garantindo que ele só possa ver o próprio carrinho.
+  const userId = req.usuario?.id;
+
+  if (!userId) {
+    return res.status(401).json({ message: "Usuário não autenticado." });
   }
 
   try {
@@ -49,13 +39,7 @@ router.get("/:userId", verifyToken, async (req: any, res) => {
         cartItems: {
           include: {
             product: {
-              select: {
-                id: true,
-                name: true,
-                price: true,
-                imageUrl: true,
-                stock: true,
-              }
+              select: { id: true, name: true, price: true, imageUrl: true, stock: true }
             }
           }
         }
@@ -63,32 +47,33 @@ router.get("/:userId", verifyToken, async (req: any, res) => {
     });
 
     if (!cart) {
-      // Se não houver carrinho, retorna um carrinho vazio
+      // Se não houver carrinho, retorna um carrinho vazio para consistência no frontend.
       return res.status(200).json({ userId, cartItems: [] });
     }
 
     res.status(200).json(cart);
   } catch (error) {
-    console.error(error);
+    console.error("Erro ao buscar carrinho:", error);
     res.status(500).json({ error: "Erro ao buscar carrinho" });
   }
 });
 
-// Rota: POST /cart/add (Adicionar item ao carrinho)
-router.post("/add", verifyToken, async (req: any, res) => {
+// Rota: POST /cart/add (Adicionar item ao carrinho do usuário autenticado)
+router.post("/add", verificarToken, async (req: Request, res: Response) => {
+  if (!req.usuario) {
+    return res.status(401).json({ message: "Usuário não autenticado." });
+  }
+
   const validation = addToCartSchema.safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({ errors: validation.error.issues });
   }
 
   const { productId, quantity } = validation.data;
-  const userId = req.userId; // Obtido do token de autenticação
+  const userId = req.usuario.id;
 
   try {
-    // Verifica se o produto existe e tem estoque suficiente
-    const product = await prisma.product.findUnique({
-      where: { id: productId }
-    });
+    const product = await prisma.product.findUnique({ where: { id: productId } });
 
     if (!product) {
       return res.status(404).json({ message: "Produto não encontrado" });
@@ -97,23 +82,15 @@ router.post("/add", verifyToken, async (req: any, res) => {
       return res.status(400).json({ message: `Estoque insuficiente para ${product.name}. Disponível: ${product.stock}` });
     }
 
-    let cart = await prisma.cart.findUnique({
-      where: { userId }
+    // Encontra ou cria o carrinho para o usuário
+    const cart = await prisma.cart.upsert({
+      where: { userId },
+      update: {},
+      create: { userId },
     });
 
-    // Se o carrinho não existir para o usuário, cria um novo
-    if (!cart) {
-      cart = await prisma.cart.create({
-        data: { userId }
-      });
-    }
-
-    // Procura por um item existente no carrinho para o produto
     const existingCartItem = await prisma.cartItem.findFirst({
-      where: {
-        cartId: cart.id,
-        productId,
-      }
+      where: { cartId: cart.id, productId }
     });
 
     let cartItem;
@@ -126,23 +103,23 @@ router.post("/add", verifyToken, async (req: any, res) => {
     } else {
       // Se o item não existe, cria um novo
       cartItem = await prisma.cartItem.create({
-        data: {
-          cartId: cart.id,
-          productId,
-          quantity,
-        }
+        data: { cartId: cart.id, productId, quantity }
       });
     }
 
     res.status(200).json({ message: "Item adicionado ao carrinho", cartItem });
   } catch (error) {
-    console.error(error);
+    console.error("Erro ao adicionar item ao carrinho:", error);
     res.status(500).json({ error: "Erro ao adicionar item ao carrinho" });
   }
 });
 
-// Rota: PUT /cart/update/:cartItemId (Atualizar quantidade de item no carrinho)
-router.put("/update/:cartItemId", verifyToken, async (req: any, res) => {
+// Rota: PUT /cart/update/:cartItemId (Atualizar quantidade de um item)
+router.put("/update/:cartItemId", verificarToken, async (req: Request, res: Response) => {
+  if (!req.usuario) {
+    return res.status(401).json({ message: "Usuário não autenticado." });
+  }
+  
   const { cartItemId } = req.params;
   const validation = updateCartItemSchema.safeParse(req.body);
   if (!validation.success) {
@@ -150,7 +127,7 @@ router.put("/update/:cartItemId", verifyToken, async (req: any, res) => {
   }
 
   const { quantity } = validation.data;
-  const userId = req.userId;
+  const { id: userId, role: userRole } = req.usuario;
 
   try {
     const cartItem = await prisma.cartItem.findUnique({
@@ -161,13 +138,11 @@ router.put("/update/:cartItemId", verifyToken, async (req: any, res) => {
     if (!cartItem) {
       return res.status(404).json({ message: "Item do carrinho não encontrado" });
     }
-    if (cartItem.cart.userId !== userId && req.userRole !== Role.ADMIN) {
-      return res.status(403).json({ message: "Acesso negado: Você não tem permissão para alterar este item do carrinho." });
+    if (cartItem.cart.userId !== userId && userRole !== Role.ADMIN) {
+      return res.status(403).json({ message: "Acesso negado." });
     }
-
-    // Verifica estoque
     if (cartItem.product.stock < quantity) {
-      return res.status(400).json({ message: `Estoque insuficiente para ${cartItem.product.name}. Disponível: ${cartItem.product.stock}` });
+        return res.status(400).json({ message: `Estoque insuficiente para ${cartItem.product.name}. Disponível: ${cartItem.product.stock}` });
     }
 
     const updatedCartItem = await prisma.cartItem.update({
@@ -177,15 +152,19 @@ router.put("/update/:cartItemId", verifyToken, async (req: any, res) => {
 
     res.status(200).json({ message: "Quantidade do item atualizada", updatedCartItem });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Erro ao atualizar quantidade do item no carrinho" });
+    console.error("Erro ao atualizar item do carrinho:", error);
+    res.status(500).json({ error: "Erro ao atualizar item do carrinho" });
   }
 });
 
 // Rota: DELETE /cart/remove/:cartItemId (Remover item do carrinho)
-router.delete("/remove/:cartItemId", verifyToken, async (req: any, res) => {
+router.delete("/remove/:cartItemId", verificarToken, async (req: Request, res: Response) => {
+  if (!req.usuario) {
+    return res.status(401).json({ message: "Usuário não autenticado." });
+  }
+
   const { cartItemId } = req.params;
-  const userId = req.userId;
+  const { id: userId, role: userRole } = req.usuario;
 
   try {
     const cartItem = await prisma.cartItem.findUnique({
@@ -196,53 +175,44 @@ router.delete("/remove/:cartItemId", verifyToken, async (req: any, res) => {
     if (!cartItem) {
       return res.status(404).json({ message: "Item do carrinho não encontrado" });
     }
-    if (cartItem.cart.userId !== userId && req.userRole !== Role.ADMIN) {
-      return res.status(403).json({ message: "Acesso negado: Você não tem permissão para remover este item do carrinho." });
+    if (cartItem.cart.userId !== userId && userRole !== Role.ADMIN) {
+      return res.status(403).json({ message: "Acesso negado." });
     }
 
-    await prisma.cartItem.delete({
-      where: { id: cartItemId }
-    });
+    await prisma.cartItem.delete({ where: { id: cartItemId } });
 
     res.status(200).json({ message: "Item removido do carrinho" });
   } catch (error) {
-    console.error(error);
+    console.error("Erro ao remover item do carrinho:", error);
     res.status(500).json({ error: "Erro ao remover item do carrinho" });
   }
 });
 
-// NOVA ROTA: POST /cart/checkout (Finalizar Compra)
-router.post("/checkout", verifyToken, async (req: any, res) => {
-    const userId = req.userId; // Obtido do token de autenticação
+// Rota: POST /cart/checkout (Finalizar Compra e esvaziar o carrinho)
+router.post("/checkout", verificarToken, async (req: Request, res: Response) => {
+    if (!req.usuario) {
+        return res.status(401).json({ message: "Usuário não autenticado." });
+    }
+    const userId = req.usuario.id;
 
     try {
-        // Busca o carrinho do usuário
-        const cart = await prisma.cart.findUnique({
-            where: { userId }
-        });
+        const cart = await prisma.cart.findUnique({ where: { userId } });
 
         if (!cart) {
-            return res.status(404).json({ message: "Carrinho não encontrado para este usuário." });
+            return res.status(404).json({ message: "Carrinho não encontrado." });
         }
 
-        // Deleta todos os itens associados a este carrinho
-        await prisma.cartItem.deleteMany({
-            where: { cartId: cart.id }
-        });
+        // Aqui você adicionaria a lógica de pagamento e criação de pedido.
+        // Por enquanto, vamos apenas esvaziar o carrinho.
 
-        // Opcional: Você pode também deletar o carrinho se ele não tiver mais itens.
-        // No entanto, é comum manter o carrinho vazio para o próximo uso.
-        // await prisma.cart.delete({
-        //     where: { id: cart.id }
-        // });
+        await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
 
         res.status(200).json({ message: "Compra finalizada com sucesso! Carrinho esvaziado." });
 
     } catch (error) {
-        console.error(error);
+        console.error("Erro ao finalizar a compra:", error);
         res.status(500).json({ error: "Erro ao finalizar a compra." });
     }
 });
-
 
 export default router;
