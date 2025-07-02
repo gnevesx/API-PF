@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ProductItf } from "@/utils/types/ProductItf"; // Alias de importação
-import { useGlobalStore } from "@/context/GlobalStore"; // Alias de importação
+// REMOVIDO: import { useGlobalStore } from "@/context/GlobalStore"; // Não é mais necessário nesta página
 import { InputPesquisa } from "@/components/InputPesquisa"; // Alias de importação
 import { ProductCard } from "@/components/ProductCard"; // Alias de importação
 
@@ -11,22 +11,22 @@ export default function Home() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
-    // CORREÇÃO: Removido 'user' da desestruturação, pois não é usado diretamente aqui.
-    // A lógica de login é tratada pelo GlobalStoreInitializer.
-    const globalStore = useGlobalStore(); 
+    // REMOVIDO: const globalStore = useGlobalStore(); // Não é mais necessária aqui.
+    // A variável 'user' também não é usada diretamente no JSX ou na lógica de Home.
 
     // Buscar produtos
     const fetchProducts = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
+            // A variável de ambiente process.env.NEXT_PUBLIC_URL_API ainda é acessível globalmente
             const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/products`);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const data = await response.json();
             setProducts(data);
-        } catch (err: unknown) { // CORREÇÃO: Altera 'any' para 'unknown'
+        } catch (err: unknown) { // Tipo 'unknown' para o erro
             console.error("Erro ao buscar produtos:", err);
             setError("Não foi possível carregar os produtos. Tente novamente mais tarde.");
         } finally {
