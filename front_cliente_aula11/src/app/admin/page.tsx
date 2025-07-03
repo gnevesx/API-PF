@@ -1,3 +1,4 @@
+// src/app/admin/page.tsx
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -7,6 +8,16 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ProductItf } from "@/utils/types/ProductItf"; // Importar ProductItf para a listagem
 import Image from "next/image"; // Importar Image para a listagem
+
+// Importações da Victory Chart
+import {
+    VictoryBar,
+    VictoryChart,
+    VictoryAxis,
+    VictoryTheme,
+    VictoryPie,
+    VictoryLabel // Opcional, para customizar labels na pizza
+} from 'victory';
 
 // Definir interfaces para dados do dashboard, se necessário
 interface ProductSummary {
@@ -65,7 +76,7 @@ export default function AdminDashboardPage() {
     const [dashboardError, setDashboardError] = useState<string | null>(null);
 
     // =========================================================
-    // Estados e Funções para LISTAGEM DE PRODUTOS (transferidos de products-list)
+    // Estados e Funções para LISTAGEM DE PRODUTOS
     // =========================================================
     const [products, setProducts] = useState<ProductItf[]>([]);
     const [isLoadingProducts, setIsLoadingProducts] = useState(true);
@@ -77,7 +88,7 @@ export default function AdminDashboardPage() {
         try {
             const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/products`, {
                 headers: {
-                    "Authorization": `Bearer ${user.token}` // Adiciona token para listar todos, se rota pública precisa ser pública
+                    "Authorization": `Bearer ${user.token}`
                 }
             });
             if (!response.ok) {
@@ -91,7 +102,7 @@ export default function AdminDashboardPage() {
         } finally {
             setIsLoadingProducts(false);
         }
-    }, [user.token]); // user.token como dependência para buscar produtos após auto-login
+    }, [user.token]);
 
     const handleDeleteProduct = async (productId: string, productName: string) => {
         if (!user.id || user.role !== "ADMIN" || !user.token) {
@@ -113,8 +124,9 @@ export default function AdminDashboardPage() {
 
             if (response.ok) {
                 toast.success(`Produto "${productName}" deletado com sucesso!`);
-                // Atualiza a lista de produtos no estado, removendo o produto deletado
                 setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
+                // Também atualiza o resumo para refletir a mudança no gráfico
+                fetchProductSummary(); 
             } else {
                 const errorData = await response.json();
                 toast.error(errorData.message || "Erro ao deletar produto.");
@@ -229,28 +241,20 @@ export default function AdminDashboardPage() {
     useEffect(() => {
         console.log("AdminDashboardPage: useEffect principal disparado. user.id:", user.id, "user.role:", user.role);
 
-        // Verifica se o GlobalStoreInitializer já terminou de tentar logar o usuário.
-        // Se user.id ainda é undefined, mas há um token no localStorage, significa que o auto-login está em andamento.
         const isAuthenticating = (user.id === undefined && typeof window !== 'undefined' && localStorage.getItem("userToken"));
 
         if (isAuthenticating) {
             console.log("AdminDashboardPage: Auto-login em andamento, aguardando estado final do usuário.");
-            // Não faça mais nada neste useEffect por enquanto, espere o próximo ciclo de renderização
-            // quando o 'user' do GlobalStore já estará populado pelo GlobalStoreInitializer.
-            return;
+            return; 
         }
 
-        // --- Se chegamos aqui, o estado de autenticação foi hidratado (user.id não é mais undefined ou token é null). ---
-
-        // Cenario 1: Usuário não logado ou token inválido/expirado
         if (!user.id) { 
-            console.log("AdminDashboardPage: Usuário não logado ou token inválido/expirado, redirecionando para /login.");
+            console.log("AdminDashboardPage: Usuário não logado ou token inválido, redirecionando para /login.");
             router.push('/login');
             toast.warning("Você precisa estar logado para acessar o painel administrativo.");
             return;
         }
         
-        // Cenario 2: Logado, mas não ADMIN
         if (user.role !== "ADMIN") { 
             console.log("AdminDashboardPage: Usuário não é ADMIN, redirecionando para /.");
             router.push('/');
@@ -258,11 +262,9 @@ export default function AdminDashboardPage() {
             return;
         }
 
-        // Cenario 3: O usuário está logado e é ADMIN. Agora buscamos os dados do dashboard.
         console.log("AdminDashboardPage: Usuário é ADMIN. Buscando dados do dashboard.");
-        // Apenas busca se os dados principais ainda não foram carregados (para evitar chamadas redundantes)
         if (!productSummary && !customerCarts.length && !products.length) { 
-            setLoadingDashboardData(true); // Ativa o loading para os dados do dashboard
+            setLoadingDashboardData(true); 
             Promise.all([
                 fetchProducts(), 
                 fetchProductSummary(),
@@ -277,11 +279,9 @@ export default function AdminDashboardPage() {
                 setDashboardError("Não foi possível carregar todos os dados do dashboard.");
             })
             .finally(() => {
-                setLoadingDashboardData(false); // Desativa o loading, mesmo se houver erro
+                setLoadingDashboardData(false); 
             });
         } else {
-             // Se os dados já foram carregados (ou estão em processo por outra renderização), 
-             // apenas garantir que o estado de carregamento esteja correto.
              setLoadingDashboardData(false);
         }
 
@@ -292,8 +292,6 @@ export default function AdminDashboardPage() {
     // Renderização baseada no estado de carregamento e autenticação
     // =========================================================
 
-    // Tela de carregamento enquanto a autenticação está sendo verificada (no auto-login)
-    // Mostra se user.id é undefined MAS há um token no localStorage (auto-login está em andamento)
     if (user.id === undefined && typeof window !== 'undefined' && localStorage.getItem("userToken")) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -302,13 +300,10 @@ export default function AdminDashboardPage() {
         );
     }
     
-    // Se o usuário não for admin ou não estiver logado após a verificação final
-    // (O useEffect já deve ter redirecionado, este é um fallback visual)
     if (!user.id || user.role !== "ADMIN") {
-        return null; // ou um componente de "Acesso Negado" mais sofisticado
+        return null; 
     }
 
-    // Tela de carregamento dos dados do Dashboard (após autenticação)
     if (loadingDashboardData) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -317,7 +312,6 @@ export default function AdminDashboardPage() {
         );
     }
 
-    // Tela de erro geral do dashboard
     if (dashboardError) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -358,17 +352,58 @@ export default function AdminDashboardPage() {
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">Produtos por Categoria</h3>
                                 {productSummary.productsByCategory.length > 0 ? (
                                     <div className="w-full h-64"> {/* Define altura para o gráfico */}
-                                        {/* Aqui você integraria a biblioteca Victory Chart */}
-                                        <p className="text-gray-500 dark:text-gray-400">
-                                            (Integrar gráfico Victory aqui. Ex: Pizza chart ou Bar chart por categoria)
-                                        </p>
-                                        <ul>
-                                            {productSummary.productsByCategory.map(item => (
-                                                <li key={item.category} className="text-gray-700 dark:text-gray-300">
-                                                    {item.category}: {item.count} produtos (Estoque: {item.totalStock})
-                                                </li>
-                                            ))}
-                                        </ul>
+                                        {/* Gráfico de Barras por Categoria (Contagem de Produtos) */}
+                                        <div className="mt-4">
+                                            <h4 className="text-lg font-medium mb-2">Contagem de Produtos por Categoria</h4>
+                                            <VictoryChart
+                                                theme={VictoryTheme.material}
+                                                domainPadding={20}
+                                                height={250} 
+                                                // Gráfico de barras para contagem por categoria
+                                            >
+                                                <VictoryAxis
+                                                    tickValues={productSummary.productsByCategory.map(d => d.category)}
+                                                    tickFormat={productSummary.productsByCategory.map(d => d.category)}
+                                                    style={{
+                                                        tickLabels: { fill: "white", fontSize: 10, angle: -45, verticalAnchor: "middle", textAnchor: "end" },
+                                                        axis: { stroke: "white" },
+                                                        grid: { stroke: "gray", strokeDasharray: "4 4" }
+                                                    }}
+                                                />
+                                                <VictoryAxis
+                                                    dependentAxis
+                                                    tickFormat={(x) => (`${Math.round(x)}`)}
+                                                    style={{
+                                                        tickLabels: { fill: "white", fontSize: 10 },
+                                                        axis: { stroke: "white" },
+                                                        grid: { stroke: "gray", strokeDasharray: "4 4" }
+                                                    }}
+                                                />
+                                                <VictoryBar
+                                                    data={productSummary.productsByCategory.map(item => ({ category: item.category, count: item.count }))}
+                                                    x="category"
+                                                    y="count"
+                                                    labels={({ datum }) => datum.count}
+                                                    style={{ data: { fill: "#61dafb" }, labels: { fill: "white" } }}
+                                                />
+                                            </VictoryChart>
+                                        </div>
+
+                                        {/* Gráfico de Pizza por Categoria (Contagem de Produtos) */}
+                                        <div className="mt-8 flex justify-center">
+                                            <h4 className="text-lg font-medium mb-2">Distribuição de Produtos por Categoria</h4>
+                                            <VictoryPie
+                                                data={productSummary.productsByCategory.map(item => ({ x: item.category, y: item.count }))}
+                                                colorScale="qualitative" 
+                                                radius={80} 
+                                                innerRadius={30} 
+                                                labelRadius={({ innerRadius }) => (typeof innerRadius === "number" ? innerRadius : 0) + 20 }
+                                                labels={({ datum }) => `${datum.x}: ${datum.y}`}
+                                                style={{ labels: { fill: "white", fontSize: 10 } }}
+                                                padAngle={2}
+                                            />
+                                        </div>
+
                                     </div>
                                 ) : (
                                     <p className="text-gray-500 dark:text-gray-400">Nenhuma categoria encontrada.</p>
