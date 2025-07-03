@@ -1,5 +1,5 @@
 // src/app/admin/page.tsx
-"use client";
+'use client';
 
 import { useEffect, useState, useCallback } from "react";
 import { toast } from 'sonner';
@@ -290,7 +290,7 @@ export default function AdminDashboardPage() {
 
                 {/* Seção de Resumo e Gráficos */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-                    {/* Card de Resumo de Produtos */}
+                    {/* Card de Resumo de Produtos (mantido o conteúdo) */}
                     <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6">
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Resumo de Produtos</h2>
                         {isLoadingSummary ? (
@@ -312,30 +312,31 @@ export default function AdminDashboardPage() {
                     </div>
 
                     {/* Gráfico de Barras por Categoria */}
-                    <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6 col-span-1 md:col-span-2 lg:col-span-1 flex flex-col items-center">
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">Contagem de Produtos por Categoria</h3>
-                        {(productSummary?.productsByCategory ?? []).length > 0 ? (
-                            <div className="w-full h-72 flex justify-center">
+                    <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6 col-span-1 md:col-span-1 flex flex-col items-center justify-center"> {/* Ajuste aqui para ocupar apenas 1 coluna no md */}
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3 text-center">Contagem de Produtos por Categoria</h3>
+                        {(productSummary?.productsByCategory?.length ?? 0) > 0 ? (
+                            <div className="w-full h-72"> {/* Aumentado para 72 (288px) para mais espaço */}
                                 <VictoryChart
                                     theme={VictoryTheme.material}
-                                    domainPadding={20}
-                                    height={250}
+                                    domainPadding={{ x: 30 }} // Ajuste o padding para as barras
+                                    height={280} // Aumentado para dar mais espaço ao gráfico
+                                    padding={{ top: 20, bottom: 80, left: 60, right: 20 }} // Ajuste o padding interno do chart para labels
                                 >
                                     <VictoryAxis
                                         tickValues={productSummary?.productsByCategory?.map(d => d.category) ?? []}
                                         tickFormat={productSummary?.productsByCategory?.map(d => d.category) ?? []}
                                         style={{
-                                            tickLabels: { fill: "white", fontSize: 8, angle: -45, verticalAnchor: "middle", textAnchor: "end" },
-                                            axis: { stroke: "white" },
-                                            grid: { stroke: "gray", strokeDasharray: "4 4" }
+                                            tickLabels: { fill: "gray", fontSize: 10, angle: -45, verticalAnchor: "middle", textAnchor: "end" }, // Corrigido fill para gray
+                                            axis: { stroke: "gray" }, // Corrigido stroke para gray
+                                            grid: { stroke: "transparent" } // Oculta as linhas de grid do eixo X se desejar
                                         }}
                                     />
                                     <VictoryAxis
                                         dependentAxis
                                         tickFormat={(x) => (`${Math.round(x)}`)}
                                         style={{
-                                            tickLabels: { fill: "white", fontSize: 10 },
-                                            axis: { stroke: "white" },
+                                            tickLabels: { fill: "gray", fontSize: 10 }, // Corrigido fill para gray
+                                            axis: { stroke: "gray" }, // Corrigido stroke para gray
                                             grid: { stroke: "gray", strokeDasharray: "4 4" }
                                         }}
                                     />
@@ -344,7 +345,7 @@ export default function AdminDashboardPage() {
                                         x="category"
                                         y="count"
                                         labels={({ datum }) => datum.count}
-                                        style={{ data: { fill: "#61dafb" }, labels: { fill: "white", fontSize: 8 } }}
+                                        style={{ data: { fill: "#61dafb" }, labels: { fill: "white", fontSize: 10 } }} // Aumentado fontSize para labels
                                     />
                                 </VictoryChart>
                             </div>
@@ -354,18 +355,21 @@ export default function AdminDashboardPage() {
                     </div>
 
                     {/* Gráfico de Pizza por Categoria */}
-                    <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6 col-span-1 md:col-span-2 lg:col-span-1 flex flex-col items-center">
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">Distribuição de Produtos por Categoria</h3>
-                        {(productSummary?.productsByCategory && productSummary.productsByCategory.length > 0) ? (
-                            <div className="w-full h-72 flex justify-center items-center">
+                    <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6 col-span-1 md:col-span-1 flex flex-col items-center justify-center"> {/* Ajuste aqui para ocupar apenas 1 coluna no md */}
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3 text-center">Distribuição de Produtos por Categoria</h3>
+                        {(productSummary?.productsByCategory?.length ?? 0) > 0 ? (
+                            <div className="w-full h-72 flex justify-center items-center relative"> {/* Aumentado para 72 (288px) e adicionado relative */}
                                 <VictoryPie
-                                    data={productSummary.productsByCategory.map(item => ({ x: item.category, y: item.count }))}
+                                    data={productSummary?.productsByCategory?.map(item => ({ x: item.category, y: item.count })) ?? []}
                                     colorScale="qualitative"
-                                    radius={80}
-                                    innerRadius={30}
-                                    labelRadius={100}
+                                    radius={100} // Aumentado o raio para maior visibilidade
+                                    innerRadius={40} // Ajustado o innerRadius para um donut maior
+                                    labelRadius={({ radius }) => (radius as number) + 20} // Ajustado labelRadius para labels externos
                                     labels={({ datum }) => `${datum.x}: ${datum.y}`}
-                                    style={{ labels: { fill: "white", fontSize: 8 }, data: { fillOpacity: 0.9, stroke: "white", strokeWidth: 1 } }}
+                                    style={{
+                                        labels: { fill: "white", fontSize: 10, fontWeight: "bold" }, // Aumentado fontSize e adicionado bold
+                                        data: { fillOpacity: 0.9, stroke: "white", strokeWidth: 1 }
+                                    }}
                                     padAngle={3}
                                 />
                             </div>
@@ -373,17 +377,10 @@ export default function AdminDashboardPage() {
                             <p className="text-gray-500 dark:text-gray-400">Nenhuma categoria encontrada.</p>
                         )}
                     </div>
-
-                    {/* Espaço para outros gráficos */}
-                    <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6 flex items-center justify-center">
-                        <p className="text-gray-500 dark:text-gray-400 text-center">
-                            Área para futuros gráficos e resumos (ex: vendas por mês).
-                        </p>
-                    </div>
                 </div>
 
                 {/* Seção de Gerenciar Produtos */}
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex justify-between items-center mb-6 mt-12"> {/* Adicionado mt-12 para separar dos gráficos */}
                     <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Lista de Produtos</h2>
                     <Link href="/admin/add-product" className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gray-700 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:bg-gray-600 dark:hover:bg-gray-700">
                         <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
