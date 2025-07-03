@@ -119,7 +119,7 @@ router.put("/update/:cartItemId", verificarToken, async (req: Request, res: Resp
   if (!req.usuario) {
     return res.status(401).json({ message: "Usuário não autenticado." });
   }
-  
+
   const { cartItemId } = req.params;
   const validation = updateCartItemSchema.safeParse(req.body);
   if (!validation.success) {
@@ -142,7 +142,7 @@ router.put("/update/:cartItemId", verificarToken, async (req: Request, res: Resp
       return res.status(403).json({ message: "Acesso negado." });
     }
     if (cartItem.product.stock < quantity) {
-        return res.status(400).json({ message: `Estoque insuficiente para ${cartItem.product.name}. Disponível: ${cartItem.product.stock}` });
+      return res.status(400).json({ message: `Estoque insuficiente para ${cartItem.product.name}. Disponível: ${cartItem.product.stock}` });
     }
 
     const updatedCartItem = await prisma.cartItem.update({
@@ -214,5 +214,65 @@ router.post("/checkout", verificarToken, async (req: Request, res: Response) => 
         res.status(500).json({ error: "Erro ao finalizar a compra." });
     }
 });
+
+// ====================================================================
+// NOVAS ROTAS PARA DASHBOARD ADMIN - GERENCIAMENTO DE CARRINHOS DE CLIENTES
+// ====================================================================
+
+// Rota: GET /cart/admin/all (Listar TODOS os carrinhos - Apenas ADMIN)
+router.get("/admin/all", verificarToken, verificarAdmin, async (req: Request, res: Response) => {
+  try {
+    const allCarts = await prisma.cart.findMany({
+      include: {
+        user: { // Inclui informações básicas do usuário dono do carrinho
+          select: { id: true, name: true, email: true }
+        },
+        cartItems: {
+          include: {
+            product: {
+              select: { id: true, name: true, price: true, imageUrl: true }
+            }
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc' // Ordena pelos carrinhos mais recentes
+      }
+    });
+
+    // Filtra carrinhos que podem não ter itens se a API retornar assim
+    const activeCarts = allCarts.filter(cart => cart.cartItems.length > 0);
+
+    res.status(200).json(activeCarts);
+  } catch (error) {
+    console.error("Erro ao buscar todos os carrinhos para admin:", error);
+    res.status(500).json({ error: "Erro ao buscar todos os carrinhos" });
+  }
+});
+
+// Rota: DELETE /cart/admin/clear/:userId (Excluir/Esvaziar o carrinho de um usuário específico - Apenas ADMIN)
+router.delete("/admin/clear/:userId", verificarToken, verificarAdmin, async (req: Request, res: Response) => {
+  const { userId } = req.params; // ID do usuário cujo carrinho será esvaziado
+
+  try {
+    const cart = await prisma.cart.findUnique({
+      where: { userId }
+    });
+
+    if (!cart) {
+      return res.status(404).json({ message: "Carrinho do usuário não encontrado." });
+    }
+
+    await prisma.cartItem.deleteMany({
+      where: { cartId: cart.id }
+    });
+
+    res.status(200).json({ message: `Carrinho do usuário ${userId} esvaziado com sucesso.` });
+  } catch (error) {
+    console.error(`Erro ao esvaziar carrinho do usuário ${userId}:`, error);
+    res.status(500).json({ error: "Erro ao esvaziar carrinho do usuário" });
+  }
+});
+
 
 export default router;
