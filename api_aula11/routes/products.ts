@@ -141,4 +141,48 @@ router.get("/search/:term", async (req: Request, res: Response) => {
   }
 });
 
+// Rota: GET /products/summary (Resumo de produtos para Dashboard - Apenas ADMIN)
+router.get("/summary", verificarToken, verificarAdmin, async (req: Request, res: Response) => {
+    try {
+        const totalProducts = await prisma.product.count(); // Total de produtos no DB
+
+        // Contagem e soma de estoque por categoria
+        const productsByCategory = await prisma.product.groupBy({
+            by: ['category'],
+            _count: {
+                id: true, // Conta quantos produtos em cada categoria
+            },
+            _sum: {
+                stock: true, // Soma o estoque total por categoria
+            },
+            orderBy: {
+                _count: {
+                    id: 'desc', // Ordena pela categoria com mais produtos
+                },
+            },
+        });
+
+        // Soma total do estoque de todos os produtos
+        const totalStockResult = await prisma.product.aggregate({
+            _sum: {
+                stock: true,
+            },
+        });
+
+        res.status(200).json({
+            totalProducts: totalProducts,
+            productsByCategory: productsByCategory.map(item => ({
+                category: item.category || 'Sem Categoria', // Garante um nome para categoria nula
+                count: item._count.id,
+                totalStock: item._sum.stock || 0, // Garante que stock é 0 se for nulo
+            })),
+            totalStock: totalStockResult._sum.stock || 0, // Garante que totalStock é 0 se for nulo
+        });
+
+    } catch (error) {
+        console.error("Erro ao buscar resumo de produtos para dashboard:", error);
+        res.status(500).json({ error: "Erro ao buscar resumo de produtos" });
+    }
+});
+
 export default router;
