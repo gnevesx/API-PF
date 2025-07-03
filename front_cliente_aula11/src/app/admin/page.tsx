@@ -61,9 +61,6 @@ export default function AdminDashboardPage() {
     const { user } = useGlobalStore();
     const router = useRouter();
 
-    // Novo estado para controlar se a autenticação global foi hidratada
-    const [isAuthHydrated, setIsAuthHydrated] = useState(false);
-
     const [loadingDashboardData, setLoadingDashboardData] = useState(true);
     const [dashboardError, setDashboardError] = useState<string | null>(null);
 
@@ -230,48 +227,45 @@ export default function AdminDashboardPage() {
     // Efeitos de Carregamento e Autenticação Inicial do Dashboard
     // =========================================================
     useEffect(() => {
-        // Log para ver o estado do usuário ao disparar o useEffect
-        console.log("AdminDashboardPage: useEffect disparado. user.id:", user.id, "user.role:", user.role);
+        console.log("AdminDashboardPage: useEffect principal disparado. user.id:", user.id, "user.role:", user.role);
 
-        // Verifica se o estado de autenticação já foi populado pelo GlobalStoreInitializer
-        // user.id será 'undefined' na primeira render, mas será preenchido ou permanecerá undefined se não logado
-        if (user.id !== undefined || localStorage.getItem("userToken") === null) {
-            setIsAuthHydrated(true); // Marca que a hidratação de auth está completa
+        // Se o user.id ainda é undefined E há um token em localStorage (auto-login pendente)
+        // Mostra um loading de autenticação.
+        const isAuthenticating = (user.id === undefined && localStorage.getItem("userToken"));
+
+        if (isAuthenticating) {
+            console.log("AdminDashboardPage: Autenticação em andamento, aguardando...");
+            // Retorna para exibir o loading de autenticação
+            return; 
         }
-    }, [user.id]); // Roda quando user.id muda
 
-    useEffect(() => {
-        // Só executa as checagens e buscas de dados APÓS a autenticação estar hidratada
-        if (!isAuthHydrated) {
-            console.log("AdminDashboardPage: Aguardando hidratação de autenticação...");
-            return;
-        }
-        
-        console.log("AdminDashboardPage: Autenticação hidratada. Verificando permissões e buscando dados.");
+        // Se chegamos aqui, o estado de autenticação foi hidratado (user.id não é mais undefined ou token é null).
 
-        // Redireciona se não for admin ou não estiver logado
-        if (!user.id) { // user.id será undefined se não houver token ou for inválido
-            console.log("AdminDashboardPage: Usuário não logado, redirecionando para /login.");
+        // Cenario 1: Usuario não logado ou token inválido/expirado
+        if (!user.id) { 
+            console.log("AdminDashboardPage: Usuário não logado ou token inválido, redirecionando para /login.");
             router.push('/login');
             toast.warning("Você precisa estar logado para acessar o painel administrativo.");
             return;
         }
-        if (user.role !== "ADMIN") {
+        
+        // Cenario 2: Logado, mas não ADMIN
+        if (user.role !== "ADMIN") { 
             console.log("AdminDashboardPage: Usuário não é ADMIN, redirecionando para /.");
             router.push('/');
             toast.error("Acesso negado: Você não tem permissão para acessar esta página.");
             return;
         }
 
-        // Se chegamos aqui, o usuário é ADMIN e está logado. Agora buscamos os dados do dashboard.
-        // Evita chamadas múltiplas se já estiver carregando ou se já houver dados.
-        if (!loadingDashboardData && !dashboardError && (!products.length && !productSummary && !customerCarts.length)) {
-             // Apenas busca se os dados ainda não foram carregados com sucesso
+        // Cenario 3: O usuário está logado e é ADMIN. Agora buscamos os dados do dashboard.
+        console.log("AdminDashboardPage: Usuário é ADMIN. Buscando dados do dashboard.");
+        // Apenas busca se os dados principais ainda não foram carregados
+        if (!productSummary && !customerCarts.length && !products.length) { 
             setLoadingDashboardData(true);
             Promise.all([
-                fetchProducts(), // Busca a lista de produtos
-                fetchProductSummary(), // Busca o resumo para gráficos
-                fetchCustomerCarts() // Busca os carrinhos de clientes
+                fetchProducts(), 
+                fetchProductSummary(),
+                fetchCustomerCarts() 
             ])
             .then(() => {
                 setDashboardError(null);
@@ -284,23 +278,30 @@ export default function AdminDashboardPage() {
             .finally(() => {
                 setLoadingDashboardData(false);
             });
+        } else {
+             // Dados já carregados ou em processo, apenas garantir que o loading correto esteja setado
+             setLoadingDashboardData(false);
         }
-    }, [isAuthHydrated, user.id, user.role, user.token, router, fetchProducts, fetchProductSummary, fetchCustomerCarts, loadingDashboardData, dashboardError, products.length, productSummary, customerCarts.length]);
+
+    }, [user.id, user.role, user.token, router, fetchProducts, fetchProductSummary, fetchCustomerCarts, productSummary, customerCarts.length, products.length]);
 
 
-    // Renderização baseada no estado de carregamento de autenticação
-    if (!isAuthHydrated) {
+    // =========================================================
+    // Renderização baseada no estado de carregamento e autenticação
+    // =========================================================
+
+    // Se a autenticação ainda está em andamento
+    if (user.id === undefined && localStorage.getItem("userToken")) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
                 <p className="text-xl text-gray-700 dark:text-gray-300">Verificando permissões de administrador...</p>
             </div>
         );
     }
-
-    // Se o usuário não for admin ou não estiver logado, o useEffect já redireciona.
-    // Este return só será alcançado se o redirect não ocorrer imediatamente.
+    
+    // Se o usuário não for admin ou não estiver logado (após a verificação)
     if (!user.id || user.role !== "ADMIN") {
-        return null; // Ou um componente de erro/acesso negado se o redirect falhar
+        return null; // O redirect já deve ter acontecido pelo useEffect
     }
 
     // Renderização do Dashboard (após autenticação e carregamento de dados)
@@ -365,7 +366,7 @@ export default function AdminDashboardPage() {
                                         </ul>
                                     </div>
                                 ) : (
-                                    <p className="text-gray-500 dark:text-gray-400">Nenhuma categoria encontrada.</p>
+                                    <p className="text-500 dark:text-gray-400">Nenhuma categoria encontrada.</p>
                                 )}
                             </div>
                         ) : (
