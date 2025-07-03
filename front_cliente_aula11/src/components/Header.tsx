@@ -47,45 +47,55 @@ export function Header() {
                 <div className="hidden w-full md:block md:w-auto" id="navbar-solid-bg">
                     {/* Lista de links do menu */}
                     <ul className="flex flex-col font-medium mt-4 rounded-lg bg-gray-50 md:space-x-8 rtl:space-x-reverse md:flex-row md:mt-0 md:border-0 md:bg-transparent"> {/* Fundo cinza claro para mobile, transparente para desktop */}
-                        {user.id ? (
-                            <>
-                                <li>
-                                    {/* Texto de boas-vindas com cor preta */}
-                                    <span className="text-gray-800 dark:text-white text-lg font-medium"> {/* Texto preto */}
-                                        Olá, {user.name} ({user.role})
-                                    </span>
-                                </li>
-                                {user.role === "ADMIN" && (
+                        {user.id ? ( // Se o usuário está logado
+                            user.role === "ADMIN" ? ( // Se o usuário logado é ADMIN
+                                <>
                                     <li>
-                                        {/* Botão "Adicionar Produto" com cores cinzas e azul */}
-                                        <Link href="/admin/add-product" className="text-white font-bold bg-gray-700 hover:bg-gray-800 focus:ring-2 focus:outline-none focus:ring-blue-500 rounded-lg text-sm px-4 py-2 text-center transition-colors duration-200"> {/* Fundo cinza, foco em azul */}
-                                            Adicionar Produto
+                                        {/* Botão "Dashboard" para admins */}
+                                        <Link href="/admin" className="text-white font-bold bg-gray-700 hover:bg-gray-800 focus:ring-2 focus:outline-none focus:ring-blue-500 rounded-lg text-sm px-4 py-2 text-center transition-colors duration-200">
+                                            Dashboard
                                         </Link>
                                     </li>
-                                )}
-                                <li>
-                                    {/* Botão "Meu Carrinho" com cores cinzas e azul, contador vermelho */}
-                                    <Link href="/cart" className="relative text-white font-bold bg-gray-700 hover:bg-gray-800 focus:ring-2 focus:outline-none focus:ring-blue-500 rounded-lg text-sm px-4 py-2 text-center transition-colors duration-200"> {/* Fundo cinza, foco em azul */}
-                                        Meu Carrinho
-                                        {totalCartItems > 0 && (
-                                            <span className="absolute -top-2 -right-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
-                                                {totalCartItems}
-                                            </span>
-                                        )}
-                                    </Link>
-                                </li>
-                                <li>
-                                    {/* Link "Sair" com cor preta e hover suave */}
-                                    <span className="cursor-pointer font-bold text-gray-700 hover:text-gray-900 transition-colors duration-200" /* Texto preto e hover mais escuro */
-                                        onClick={handleLogout}>
-                                        Sair
-                                    </span>
-                                </li>
-                            </>
-                        ) : (
+                                    <li>
+                                        {/* Botão "Sair" */}
+                                        <span className="cursor-pointer font-bold text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300 transition-colors duration-200"
+                                            onClick={handleLogout}>
+                                            Sair
+                                        </span>
+                                    </li>
+                                </>
+                            ) : ( // Se o usuário logado é VISITANTE
+                                <>
+                                    <li>
+                                        {/* Texto de boas-vindas */}
+                                        <span className="text-gray-800 dark:text-white text-lg font-medium">
+                                            Olá, {user.name}
+                                        </span>
+                                    </li>
+                                    <li>
+                                        {/* Botão "Meu Carrinho" com contador */}
+                                        <Link href="/cart" className="relative text-white font-bold bg-gray-700 hover:bg-gray-800 focus:ring-2 focus:outline-none focus:ring-blue-500 rounded-lg text-sm px-4 py-2 text-center transition-colors duration-200">
+                                            Meu Carrinho
+                                            {totalCartItems > 0 && (
+                                                <span className="absolute -top-2 -right-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
+                                                    {totalCartItems}
+                                                </span>
+                                            )}
+                                        </Link>
+                                    </li>
+                                    <li>
+                                        {/* Botão "Sair" */}
+                                        <span className="cursor-pointer font-bold text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300 transition-colors duration-200"
+                                            onClick={handleLogout}>
+                                            Sair
+                                        </span>
+                                    </li>
+                                </>
+                            )
+                        ) : ( // Se o usuário não está logado
                             <li>
-                                {/* Link "Entrar" com cor preta e hover suave */}
-                                <Link href="/login" className="block py-2 px-3 md:p-0 text-white-700 rounded-sm hover:bg-gray-100 md:hover:bg-transparent md:border-0 hover:text-gray-900 transition-colors duration-200"> {/* Texto preto, hover cinza claro/mais escuro */}
+                                {/* Link "Entrar" */}
+                                <Link href="/login" className="block py-2 px-3 md:p-0 text-white-700 rounded-sm hover:bg-gray-100 md:hover:bg-transparent md:border-0 hover:text-gray-900 transition-colors duration-200">
                                     Entrar
                                 </Link>
                             </li>
