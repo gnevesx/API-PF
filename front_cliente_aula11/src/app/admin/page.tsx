@@ -15,15 +15,46 @@ interface ProductSummary {
     totalStock: number;
 }
 
+// NOVAS INTERFACES para os dados do carrinho como vêm da API /cart/admin/all
+interface AdminUserInCart { // Informações do usuário que vem dentro do objeto de carrinho
+    id: string;
+    name: string;
+    email: string;
+}
+
+interface AdminProductInCartItem { // Informações do produto que vem dentro do item do carrinho
+    id: string;
+    name: string;
+    price: number;
+    imageUrl: string | null;
+}
+
+interface AdminCartItemApi { // Estrutura de um item individual dentro do carrinho da API
+    id: string;
+    quantity: number;
+    productId: string;
+    cartId: string;
+    product: AdminProductInCartItem; // Usando a interface do produto dentro do item
+}
+
+interface AdminFullCartApi { // Estrutura completa de um objeto de carrinho retornado pela rota /cart/admin/all
+    id: string;
+    userId: string;
+    createdAt: string;
+    updatedAt: string;
+    user: AdminUserInCart; // Usando a interface do usuário
+    cartItems: AdminCartItemApi[]; // Array de itens do carrinho
+}
+
+// Definir interface para o estado do frontend dos carrinhos (mais simples para exibir)
 interface CartSummary {
     id: string;
     userId: string;
-    userName: string; // Adicionar se você incluir o nome do usuário na API
-    userEmail: string; // Adicionar se você incluir o email do usuário na API
+    userName: string;
+    userEmail: string;
     totalItems: number;
     totalPrice: number;
     createdAt: string;
-    // Mais detalhes do carrinho se necessário
 }
 
 export default function AdminDashboardPage() {
@@ -142,18 +173,21 @@ export default function AdminDashboardPage() {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            const data = await response.json();
-            // Mapear dados do carrinho para o formato simplificado do CartSummary, se necessário
-            setCustomerCarts(data.map((cart: any) => ({ // Substituir 'any' por tipo real da API
+            // CORREÇÃO: Tipagem 'data' como AdminFullCartApi[] para remover 'any'
+            const data: AdminFullCartApi[] = await response.json(); 
+            
+            // CORREÇÃO: Tipagem do 'cart' e 'item' no map e reduce
+            setCustomerCarts(data.map((cart: AdminFullCartApi) => ({ 
                 id: cart.id,
                 userId: cart.userId,
                 userName: cart.user?.name || 'N/A',
                 userEmail: cart.user?.email || 'N/A',
-                totalItems: cart.cartItems.reduce((sum: number, item: any) => sum + item.quantity, 0),
-                totalPrice: cart.cartItems.reduce((sum: number, item: any) => sum + (item.product?.price || 0) * item.quantity, 0),
+                // CORREÇÃO: Tipagem explícita para 'sum' e 'item' no reduce
+                totalItems: cart.cartItems.reduce((sum: number, item: AdminCartItemApi) => sum + item.quantity, 0), 
+                totalPrice: cart.cartItems.reduce((sum: number, item: AdminCartItemApi) => sum + (item.product?.price || 0) * item.quantity, 0),
                 createdAt: cart.createdAt,
             })));
-        } catch (err: unknown) {
+        } catch (err: unknown) { // Tipo 'unknown' para o erro
             console.error("Erro ao buscar carrinhos de clientes:", err);
             setCartsError("Não foi possível carregar os carrinhos de clientes.");
         } finally {
