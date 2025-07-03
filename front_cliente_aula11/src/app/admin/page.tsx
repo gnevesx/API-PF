@@ -9,7 +9,6 @@ import Link from "next/link";
 import { ProductItf } from "@/utils/types/ProductItf";
 import Image from "next/image";
 
-// Importações da Victory Chart
 import {
     VictoryBar,
     VictoryChart,
@@ -259,14 +258,15 @@ export default function AdminDashboardPage() {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const data: ClientUser[] = await response.json();
-            setClients(data);
+            // Filtra o próprio admin logado para não se excluir da lista, se desejar
+            setClients(data.filter(client => client.id !== user.id)); 
         } catch (err: unknown) {
             console.error("Erro ao buscar clientes:", err);
             setClientsError("Não foi possível carregar a lista de clientes.");
         } finally {
             setIsLoadingClients(false);
         }
-    }, [user.token]);
+    }, [user.id, user.token]); // Adicionado user.id como dependência para garantir que não exclua a si mesmo na lista
 
     const handleDeleteClient = async (clientId: string, clientName: string, clientRole: string) => {
         if (!user.id || user.role !== "ADMIN" || !user.token) {
@@ -278,12 +278,12 @@ export default function AdminDashboardPage() {
             toast.error("Você não pode deletar sua própria conta.");
             return;
         }
-        if (clientRole === "ADMIN") {
+        if (clientRole === "ADMIN") { // Também impede deletar outros admins
             toast.error("Você não pode deletar outro administrador.");
             return;
         }
 
-        if (!confirm(`Tem certeza que deseja EXCLUIR PERMANENTEMENTE a conta de "${clientName}"? Todos os dados associados (carrinhos, etc.) também serão removidos.`)) {
+        if (!confirm(`Tem certeza que deseja EXCLUIR PERMANENTEMENTE a conta de "${clientName}"? Todos os dados associados (carrinhos, pedidos, etc.) também serão removidos.`)) {
             return;
         }
 
@@ -298,8 +298,9 @@ export default function AdminDashboardPage() {
             if (response.ok) {
                 toast.success(`Conta de "${clientName}" excluída com sucesso!`);
                 setClients(prevClients => prevClients.filter(client => client.id !== clientId));
-                // Opcional: recarregar carrinhos ou resumo se houver impactos
+                // Opcional: recarregar carrinhos ou resumo se houver impactos na contagem
                 fetchCustomerCarts(); 
+                fetchProductSummary();
             } else {
                 const errorData = await response.json();
                 toast.error(errorData.message || "Erro ao excluir conta de cliente.");
@@ -333,7 +334,6 @@ export default function AdminDashboardPage() {
             return;
         }
 
-        // Se o usuário está logado e é ADMIN, busca todos os dados do dashboard
         if (!productSummary && !customerCarts.length && !products.length && !clients.length) { 
             setLoadingDashboardData(true); 
             Promise.all([
@@ -654,6 +654,75 @@ export default function AdminDashboardPage() {
                                             >
                                                 Esvaziar Carrinho
                                             </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                {/* Seção de Gerenciar Clientes (Usuários) */}
+                <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-6 mt-12">
+                    Gerenciar Clientes
+                </h2>
+                {isLoadingClients ? (
+                    <p className="text-center text-xl text-gray-600 dark:text-gray-400 mt-10">
+                        Carregando lista de clientes...
+                    </p>
+                ) : clientsError ? (
+                    <p className="text-center text-xl text-red-500 mt-10">
+                        {clientsError}
+                    </p>
+                ) : clients.length === 0 ? (
+                    <p className="text-center text-xl text-gray-600 dark:text-gray-400 mt-10">
+                        Nenhum cliente cadastrado.
+                    </p>
+                ) : (
+                    <div className="overflow-x-auto bg-white dark:bg-gray-800 shadow-xl rounded-lg">
+                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead className="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Nome
+                                    </th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Email
+                                    </th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Cargo
+                                    </th>
+                                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Ações
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                {clients.map((client) => (
+                                    <tr key={client.id}>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-sm font-medium text-gray-900 dark:text-white">{client.name}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-sm text-gray-900 dark:text-white">{client.email}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-sm text-gray-900 dark:text-white">{client.role}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            {/* Previne que o admin logado se exclua ou exclua outros admins */}
+                                            {user.id !== client.id && client.role !== "ADMIN" && (
+                                                <button
+                                                    onClick={() => handleDeleteClient(client.id, client.name, client.role)}
+                                                    className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-100"
+                                                >
+                                                    Deletar Cliente
+                                                </button>
+                                            )}
+                                            {/* Mensagem se for o próprio admin ou outro admin */}
+                                            {(user.id === client.id || client.role === "ADMIN") && (
+                                                <span className="text-gray-500 text-xs">Não pode deletar</span>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}
