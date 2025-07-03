@@ -7,7 +7,7 @@ generator client {
 
 datasource db {
   provider = "postgresql" // Verifique se está 'postgresql' ou 'postgres'
-  url      = env("DATABASE_URL")
+  url       = env("DATABASE_URL")
 }
 
 enum Role {
@@ -21,15 +21,15 @@ model User {
   password              String
   name                  String
   role                  Role      @default(VISITOR)
-  recoveryCode          String?   // Novo campo para o código de recuperação
-  recoveryCodeExpiresAt DateTime? // Novo campo para a expiração do código
+  recoveryCode          String?
+  recoveryCodeExpiresAt DateTime?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
-  carts                 Cart[]
+  carts                 Cart[]    // Um usuário pode ter vários carrinhos (embora você tenha @unique no Cart.userId, o relacionamento aqui é um para muitos para o Prisma)
 }
 
 model Product {
-  id          String    @id @default(uuid())
+  id          String     @id @default(uuid())
   name        String
   description String?
   price       Float
@@ -37,28 +37,28 @@ model Product {
   category    String?
   size        String?
   color       String?
-  stock       Int       @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  cartItems   CartItem[]
+  stock       Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  cartItems   CartItem[] // Um produto pode estar em vários itens de carrinho
 }
 
 model Cart {
   id        String     @id @default(uuid())
-  userId    String     @unique
-  user      User       @relation(fields: [userId], references: [id])
-  cartItems CartItem[]
+  userId    String     @unique // Garante que um usuário tem apenas um carrinho
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade) // <--- ADICIONADO onDelete: Cascade
+  cartItems CartItem[] // Um carrinho tem vários itens
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 }
 
 model CartItem {
-  id        String    @id @default(uuid())
+  id        String   @id @default(uuid())
   cartId    String
   productId String
   quantity  Int
-  cart      Cart      @relation(fields: [cartId], references: [id])
-  product   Product   @relation(fields: [productId], references: [id])
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)    // <--- ADICIONADO onDelete: Cascade
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade) // <--- ADICIONADO onDelete: Cascade
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
