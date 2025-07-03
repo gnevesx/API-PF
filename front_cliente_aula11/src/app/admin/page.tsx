@@ -9,6 +9,7 @@ import Link from "next/link";
 import { ProductItf } from "@/utils/types/ProductItf";
 import Image from "next/image";
 
+// Importações da Victory Chart
 import {
     VictoryBar,
     VictoryChart,
@@ -17,12 +18,24 @@ import {
     VictoryPie,
 } from 'victory';
 
+// Interface para dados do usuário como vêm da API (para a lista de clientes)
+interface ClientUser {
+    id: string;
+    name: string;
+    email: string;
+    role: 'ADMIN' | 'VISITOR';
+    createdAt: string;
+    updatedAt: string;
+}
+
+// Definir interfaces para dados do dashboard, se necessário
 interface ProductSummary {
     totalProducts: number;
     productsByCategory: { category: string; count: number; totalStock: number }[];
     totalStock: number;
 }
 
+// NOVAS INTERFACES para os dados do carrinho como vêm da API /cart/admin/all
 interface AdminUserInCart {
     id: string;
     name: string;
@@ -53,6 +66,7 @@ interface AdminFullCartApi {
     cartItems: AdminCartItemApi[];
 }
 
+// Definir interface para o estado do frontend dos carrinhos (mais simples para exibir)
 interface CartSummary {
     id: string;
     userId: string;
@@ -79,6 +93,16 @@ export default function AdminDashboardPage() {
     const [isLoadingCarts, setIsLoadingCarts] = useState(true);
     const [cartsError, setCartsError] = useState<string | null>(null);
 
+    // =========================================================
+    // NOVOS ESTADOS PARA LISTAGEM DE CLIENTES
+    // =========================================================
+    const [clients, setClients] = useState<ClientUser[]>([]);
+    const [isLoadingClients, setIsLoadingClients] = useState(true);
+    const [clientsError, setClientsError] = useState<string | null>(null);
+
+    // =========================================================
+    // Funções para LISTAGEM DE PRODUTOS
+    // =========================================================
     const fetchProducts = useCallback(async () => {
         setIsLoadingProducts(true);
         setProductsError(null);
@@ -130,6 +154,9 @@ export default function AdminDashboardPage() {
         }
     };
 
+    // =========================================================
+    // Funções para GRÁFICOS (Resumo de Produtos)
+    // =========================================================
     const fetchProductSummary = useCallback(async () => {
         setIsLoadingSummary(true);
         setSummaryError(null);
@@ -152,6 +179,9 @@ export default function AdminDashboardPage() {
         }
     }, [user.token]);
 
+    // =========================================================
+    // Funções para GERENCIAMENTO DE CARRINHOS
+    // =========================================================
     const fetchCustomerCarts = useCallback(async () => {
         setIsLoadingCarts(true);
         setCartsError(null);
@@ -164,18 +194,18 @@ export default function AdminDashboardPage() {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            const data: AdminFullCartApi[] = await response.json();
-
-            setCustomerCarts(data.map((cart: AdminFullCartApi) => ({
+            const data: AdminFullCartApi[] = await response.json(); 
+            
+            setCustomerCarts(data.map((cart: AdminFullCartApi) => ({ 
                 id: cart.id,
                 userId: cart.userId,
                 userName: cart.user?.name || 'N/A',
                 userEmail: cart.user?.email || 'N/A',
-                totalItems: cart.cartItems.reduce((sum: number, item: AdminCartItemApi) => sum + item.quantity, 0),
+                totalItems: cart.cartItems.reduce((sum: number, item: AdminCartItemApi) => sum + item.quantity, 0), 
                 totalPrice: cart.cartItems.reduce((sum: number, item: AdminCartItemApi) => sum + (item.product?.price || 0) * item.quantity, 0),
                 createdAt: cart.createdAt,
             })));
-        } catch (err: unknown) {
+        } catch (err: unknown) { 
             console.error("Erro ao buscar carrinhos de clientes:", err);
             setCartsError("Não foi possível carregar os carrinhos de clientes.");
         } finally {
@@ -191,6 +221,7 @@ export default function AdminDashboardPage() {
         if (!confirm(`Tem certeza que deseja esvaziar o carrinho de "${userName}"?`)) {
             return;
         }
+
         try {
             const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/cart/admin/clear/${userId}`, {
                 method: "DELETE",
@@ -198,6 +229,7 @@ export default function AdminDashboardPage() {
                     "Authorization": `Bearer ${user.token}`
                 }
             });
+
             if (response.ok) {
                 toast.success(`Carrinho de "${userName}" esvaziado com sucesso!`);
                 setCustomerCarts(prevCarts => prevCarts.filter(cart => cart.userId !== userId));
@@ -211,31 +243,104 @@ export default function AdminDashboardPage() {
         }
     };
 
+    // =========================================================
+    // NOVAS FUNÇÕES PARA GERENCIAMENTO DE CLIENTES
+    // =========================================================
+    const fetchClients = useCallback(async () => {
+        setIsLoadingClients(true);
+        setClientsError(null);
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/users`, { // Rota para listar todos os usuários (protegida para admin)
+                headers: {
+                    "Authorization": `Bearer ${user.token}`
+                }
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data: ClientUser[] = await response.json();
+            setClients(data);
+        } catch (err: unknown) {
+            console.error("Erro ao buscar clientes:", err);
+            setClientsError("Não foi possível carregar a lista de clientes.");
+        } finally {
+            setIsLoadingClients(false);
+        }
+    }, [user.token]);
+
+    const handleDeleteClient = async (clientId: string, clientName: string, clientRole: string) => {
+        if (!user.id || user.role !== "ADMIN" || !user.token) {
+            toast.error("Você não tem permissão para deletar usuários.");
+            return;
+        }
+        // Evita que um admin tente deletar a si mesmo ou a outro admin
+        if (clientId === user.id) {
+            toast.error("Você não pode deletar sua própria conta.");
+            return;
+        }
+        if (clientRole === "ADMIN") {
+            toast.error("Você não pode deletar outro administrador.");
+            return;
+        }
+
+        if (!confirm(`Tem certeza que deseja EXCLUIR PERMANENTEMENTE a conta de "${clientName}"? Todos os dados associados (carrinhos, etc.) também serão removidos.`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/users/${clientId}`, { // Rota DELETE /users/:id
+                method: "DELETE",
+                headers: {
+                    "Authorization": `Bearer ${user.token}`
+                }
+            });
+
+            if (response.ok) {
+                toast.success(`Conta de "${clientName}" excluída com sucesso!`);
+                setClients(prevClients => prevClients.filter(client => client.id !== clientId));
+                // Opcional: recarregar carrinhos ou resumo se houver impactos
+                fetchCustomerCarts(); 
+            } else {
+                const errorData = await response.json();
+                toast.error(errorData.message || "Erro ao excluir conta de cliente.");
+            }
+        } catch (error) {
+            console.error("Erro na requisição de deletar cliente:", error);
+            toast.error("Erro ao excluir conta de cliente. Tente novamente mais tarde.");
+        }
+    };
+
+
+    // =========================================================
+    // Efeitos de Carregamento e Autenticação Inicial do Dashboard
+    // =========================================================
     useEffect(() => {
         const isAuthenticating = (user.id === undefined && typeof window !== 'undefined' && localStorage.getItem("userToken"));
 
         if (isAuthenticating) {
-            return;
+            return; 
         }
 
-        if (!user.id) {
+        if (!user.id) { 
             router.push('/login');
             toast.warning("Você precisa estar logado para acessar o painel administrativo.");
             return;
         }
-
-        if (user.role !== "ADMIN") {
+        
+        if (user.role !== "ADMIN") { 
             router.push('/');
             toast.error("Acesso negado: Você não tem permissão para acessar esta página.");
             return;
         }
 
-        if (!productSummary && !customerCarts.length && !products.length) {
-            setLoadingDashboardData(true);
+        // Se o usuário está logado e é ADMIN, busca todos os dados do dashboard
+        if (!productSummary && !customerCarts.length && !products.length && !clients.length) { 
+            setLoadingDashboardData(true); 
             Promise.all([
-                fetchProducts(),
+                fetchProducts(), 
                 fetchProductSummary(),
-                fetchCustomerCarts()
+                fetchCustomerCarts(),
+                fetchClients() // Adiciona a busca de clientes aqui
             ])
             .then(() => {
                 setDashboardError(null);
@@ -245,13 +350,18 @@ export default function AdminDashboardPage() {
                 setDashboardError("Não foi possível carregar todos os dados do dashboard.");
             })
             .finally(() => {
-                setLoadingDashboardData(false);
+                setLoadingDashboardData(false); 
             });
         } else {
              setLoadingDashboardData(false);
         }
 
-    }, [user.id, user.role, user.token, router, fetchProducts, fetchProductSummary, fetchCustomerCarts, productSummary, customerCarts.length, products.length]);
+    }, [user.id, user.role, user.token, router, fetchProducts, fetchProductSummary, fetchCustomerCarts, fetchClients, productSummary, customerCarts.length, products.length, clients.length]);
+
+
+    // =========================================================
+    // Renderização baseada no estado de carregamento e autenticação
+    // =========================================================
 
     if (user.id === undefined && typeof window !== 'undefined' && localStorage.getItem("userToken")) {
         return (
@@ -260,9 +370,9 @@ export default function AdminDashboardPage() {
             </div>
         );
     }
-
+    
     if (!user.id || user.role !== "ADMIN") {
-        return null;
+        return null; 
     }
 
     if (loadingDashboardData) {
@@ -290,7 +400,7 @@ export default function AdminDashboardPage() {
 
                 {/* Seção de Resumo e Gráficos */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-                    {/* Card de Resumo de Produtos (mantido o conteúdo) */}
+                    {/* Card de Resumo de Produtos */}
                     <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6">
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Resumo de Produtos</h2>
                         {isLoadingSummary ? (
@@ -312,31 +422,31 @@ export default function AdminDashboardPage() {
                     </div>
 
                     {/* Gráfico de Barras por Categoria */}
-                    <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6 col-span-1 md:col-span-1 flex flex-col items-center justify-center"> {/* Ajuste aqui para ocupar apenas 1 coluna no md */}
+                    <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6 col-span-1 md:col-span-1 flex flex-col items-center justify-center">
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3 text-center">Contagem de Produtos por Categoria</h3>
                         {(productSummary?.productsByCategory?.length ?? 0) > 0 ? (
-                            <div className="w-full h-72"> {/* Aumentado para 72 (288px) para mais espaço */}
+                            <div className="w-full h-72">
                                 <VictoryChart
                                     theme={VictoryTheme.material}
-                                    domainPadding={{ x: 30 }} // Ajuste o padding para as barras
-                                    height={280} // Aumentado para dar mais espaço ao gráfico
-                                    padding={{ top: 20, bottom: 80, left: 60, right: 20 }} // Ajuste o padding interno do chart para labels
+                                    domainPadding={{ x: 30 }}
+                                    height={280}
+                                    padding={{ top: 20, bottom: 80, left: 60, right: 20 }}
                                 >
                                     <VictoryAxis
                                         tickValues={productSummary?.productsByCategory?.map(d => d.category) ?? []}
                                         tickFormat={productSummary?.productsByCategory?.map(d => d.category) ?? []}
                                         style={{
-                                            tickLabels: { fill: "gray", fontSize: 10, angle: -45, verticalAnchor: "middle", textAnchor: "end" }, // Corrigido fill para gray
-                                            axis: { stroke: "gray" }, // Corrigido stroke para gray
-                                            grid: { stroke: "transparent" } // Oculta as linhas de grid do eixo X se desejar
+                                            tickLabels: { fill: "gray", fontSize: 10, angle: -45, verticalAnchor: "middle", textAnchor: "end" },
+                                            axis: { stroke: "gray" },
+                                            grid: { stroke: "transparent" }
                                         }}
                                     />
                                     <VictoryAxis
                                         dependentAxis
                                         tickFormat={(x) => (`${Math.round(x)}`)}
                                         style={{
-                                            tickLabels: { fill: "gray", fontSize: 10 }, // Corrigido fill para gray
-                                            axis: { stroke: "gray" }, // Corrigido stroke para gray
+                                            tickLabels: { fill: "gray", fontSize: 10 },
+                                            axis: { stroke: "gray" },
                                             grid: { stroke: "gray", strokeDasharray: "4 4" }
                                         }}
                                     />
@@ -345,7 +455,7 @@ export default function AdminDashboardPage() {
                                         x="category"
                                         y="count"
                                         labels={({ datum }) => datum.count}
-                                        style={{ data: { fill: "#61dafb" }, labels: { fill: "white", fontSize: 10 } }} // Aumentado fontSize para labels
+                                        style={{ data: { fill: "#61dafb" }, labels: { fill: "white", fontSize: 10 } }}
                                     />
                                 </VictoryChart>
                             </div>
@@ -355,19 +465,19 @@ export default function AdminDashboardPage() {
                     </div>
 
                     {/* Gráfico de Pizza por Categoria */}
-                    <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6 col-span-1 md:col-span-1 flex flex-col items-center justify-center"> {/* Ajuste aqui para ocupar apenas 1 coluna no md */}
+                    <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6 col-span-1 md:col-span-1 flex flex-col items-center justify-center">
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3 text-center">Distribuição de Produtos por Categoria</h3>
                         {(productSummary?.productsByCategory?.length ?? 0) > 0 ? (
-                            <div className="w-full h-72 flex justify-center items-center relative"> {/* Aumentado para 72 (288px) e adicionado relative */}
+                            <div className="w-full h-72 flex justify-center items-center relative">
                                 <VictoryPie
                                     data={productSummary?.productsByCategory?.map(item => ({ x: item.category, y: item.count })) ?? []}
                                     colorScale="qualitative"
-                                    radius={100} // Aumentado o raio para maior visibilidade
-                                    innerRadius={40} // Ajustado o innerRadius para um donut maior
-                                    labelRadius={({ radius }) => (radius as number) + 20} // Ajustado labelRadius para labels externos
+                                    radius={100}
+                                    innerRadius={40}
+                                    labelRadius={({ radius }) => (radius as number) + 20}
                                     labels={({ datum }) => `${datum.x}: ${datum.y}`}
                                     style={{
-                                        labels: { fill: "white", fontSize: 10, fontWeight: "bold" }, // Aumentado fontSize e adicionado bold
+                                        labels: { fill: "white", fontSize: 10, fontWeight: "bold" },
                                         data: { fillOpacity: 0.9, stroke: "white", strokeWidth: 1 }
                                     }}
                                     padAngle={3}
@@ -377,10 +487,17 @@ export default function AdminDashboardPage() {
                             <p className="text-gray-500 dark:text-gray-400">Nenhuma categoria encontrada.</p>
                         )}
                     </div>
+
+                    {/* Card para Outros Gráficos/Resumos Futuros */}
+                    <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6 flex items-center justify-center">
+                        <p className="text-gray-500 dark:text-gray-400 text-center">
+                            Área para futuros gráficos e resumos (ex: vendas por mês).
+                        </p>
+                    </div>
                 </div>
 
                 {/* Seção de Gerenciar Produtos */}
-                <div className="flex justify-between items-center mb-6 mt-12"> {/* Adicionado mt-12 para separar dos gráficos */}
+                <div className="flex justify-between items-center mb-6 mt-12">
                     <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Lista de Produtos</h2>
                     <Link href="/admin/add-product" className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gray-700 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:bg-gray-600 dark:hover:bg-gray-700">
                         <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
