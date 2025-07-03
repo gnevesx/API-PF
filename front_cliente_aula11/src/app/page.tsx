@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ProductItf } from "@/utils/types/ProductItf"; // Alias de importação
-// REMOVIDO: import { useGlobalStore } from "@/context/GlobalStore"; // Não é mais necessário nesta página
 import { InputPesquisa } from "@/components/InputPesquisa"; // Alias de importação
 import { ProductCard } from "@/components/ProductCard"; // Alias de importação
 
@@ -11,15 +10,11 @@ export default function Home() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
-    // REMOVIDO: const globalStore = useGlobalStore(); // Não é mais necessária aqui.
-    // A variável 'user' também não é usada diretamente no JSX ou na lógica de Home.
-
     // Buscar produtos
     const fetchProducts = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
-            // A variável de ambiente process.env.NEXT_PUBLIC_URL_API ainda é acessível globalmente
             const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/products`);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -41,24 +36,26 @@ export default function Home() {
 
     return (
         <>
+            {/* InputPesquisa já tem seus próprios estilos, mas o fundo geral é definido aqui */}
             <InputPesquisa setProducts={setProducts} />
 
-            <div className="min-h-screen bg-white dark:bg-gray-900 py-8">
+            {/* Container principal da página com fundo cinza MUITO escuro */}
+            <div className="min-h-screen bg-gray-950 py-8"> {/* CORREÇÃO AQUI: Fundo mais escuro */}
                 <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-                    <h1 className="text-center text-4xl sm:text-5xl font-extrabold text-gray-900 dark:text-white mb-12">
-                        Nossos <span className="underline decoration-gray-600 dark:decoration-gray-400">Produtos</span>
+                    <h1 className="text-center text-4xl sm:text-5xl font-extrabold text-white mb-12"> {/* CORREÇÃO AQUI: Texto branco */}
+                        Nossos <span className="underline decoration-blue-500">Produtos</span> {/* CORREÇÃO AQUI: Sublinhado azul */}
                     </h1>
 
                     {isLoading ? (
-                        <p className="text-center text-xl text-gray-600 dark:text-gray-400 mt-10">
+                        <p className="text-center text-xl text-gray-300 mt-10"> {/* CORREÇÃO AQUI: Texto cinza claro */}
                             A carregar produtos...
                         </p>
                     ) : error ? (
-                        <p className="text-center text-xl text-red-500 mt-10">
+                        <p className="text-center text-xl text-red-400 mt-10"> {/* CORREÇÃO AQUI: Texto vermelho mais suave */}
                             {error}
                         </p>
                     ) : products.length === 0 ? (
-                        <p className="text-center text-xl text-gray-600 dark:text-gray-400 mt-10">
+                        <p className="text-center text-xl text-gray-300 mt-10"> {/* CORREÇÃO AQUI: Texto cinza claro */}
                             Nenhum produto encontrado.
                         </p>
                     ) : (
