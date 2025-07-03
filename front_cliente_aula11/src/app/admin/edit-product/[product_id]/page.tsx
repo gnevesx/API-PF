@@ -10,7 +10,6 @@ import Link from "next/link";
 import { ProductItf } from "@/utils/types/ProductItf"; // Certifique-se que esta tipagem está correta
 
 // --- Tipagem dos campos do formulário de edição ---
-// Deve ser igual aos campos do ProductItf, mas todos opcionais para atualização parcial
 type EditInputs = {
     name: string;
     description?: string | null;
@@ -25,7 +24,7 @@ type EditInputs = {
 // --- Tipagem para a resposta de erro da API ---
 type ApiError = {
     message: string;
-    errors?: any[]; // Para erros de validação do Zod, se o backend retornar
+    errors?: { message: string }[]; // CORREÇÃO: Mais específico que 'any[]', ou 'unknown[]'
 }
 
 export default function EditProductPage() {
@@ -90,7 +89,7 @@ export default function EditProductPage() {
         if (productId && user.token) { // Garante que o ID do produto e o token do usuário existem
             fetchProduct();
         }
-    }, [productId, user.id, user.role, user.token, router, reset]); // Adicionado user.id, user.role, user.token, router e reset às dependências
+    }, [productId, user.id, user.role, user.token, router, reset]);
 
     // Função para lidar com o envio do formulário de edição
     const onSubmit = async (data: EditInputs) => {
@@ -119,7 +118,8 @@ export default function EditProductPage() {
                 router.push('/admin'); // Redireciona de volta para o dashboard
             } else {
                 const errorData: ApiError = await response.json();
-                const errorMessage = errorData.message || errorData.errors?.map((err: any) => err.message).join('; ') || "Erro ao atualizar produto.";
+                // CORREÇÃO: Tipagem do 'err' no map para garantir que é um objeto com 'message'
+                const errorMessage = errorData.message || errorData.errors?.map((err: { message: string }) => err.message).join('; ') || "Erro ao atualizar produto."; 
                 toast.error(errorMessage);
             }
         } catch (error) {
