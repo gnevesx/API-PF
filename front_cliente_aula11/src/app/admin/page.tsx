@@ -1,5 +1,5 @@
 // src/app/admin/page.tsx
-"use client";
+'use client';
 
 import { useEffect, useState, useCallback } from "react";
 import { toast } from 'sonner';
@@ -9,14 +9,13 @@ import Link from "next/link";
 import { ProductItf } from "@/utils/types/ProductItf"; // Importar ProductItf para a listagem
 import Image from "next/image"; // Importar Image para a listagem
 
-// Importações da Victory Chart (REMOVIDO VictoryLabel)
+// Importações da Victory Chart
 import {
     VictoryBar,
     VictoryChart,
     VictoryAxis,
     VictoryTheme,
     VictoryPie,
-    // REMOVIDO: VictoryLabel // Não é usado no código atual
 } from 'victory';
 
 // Definir interfaces para dados do dashboard, se necessário
@@ -88,7 +87,7 @@ export default function AdminDashboardPage() {
         try {
             const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/products`, {
                 headers: {
-                    "Authorization": `Bearer ${user.token}` // Adiciona token para listar todos, se rota pública precisa ser pública
+                    "Authorization": `Bearer ${user.token}` 
                 }
             });
             if (!response.ok) {
@@ -102,7 +101,7 @@ export default function AdminDashboardPage() {
         } finally {
             setIsLoadingProducts(false);
         }
-    }, [user.token]); // user.token como dependência para buscar produtos após auto-login
+    }, [user.token]); 
 
     const handleDeleteProduct = async (productId: string, productName: string) => {
         if (!user.id || user.role !== "ADMIN" || !user.token) {
@@ -125,7 +124,6 @@ export default function AdminDashboardPage() {
             if (response.ok) {
                 toast.success(`Produto "${productName}" deletado com sucesso!`);
                 setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
-                // Também atualiza o resumo para refletir a mudança no gráfico
                 fetchProductSummary(); 
             } else {
                 const errorData = await response.json();
@@ -397,7 +395,7 @@ export default function AdminDashboardPage() {
                                                 colorScale="qualitative" 
                                                 radius={80} 
                                                 innerRadius={30} 
-                                                labelRadius={({ innerRadius }) => (typeof innerRadius === "number" ? innerRadius : 30) + 20 }
+                                                labelRadius={({ innerRadius }) => (typeof innerRadius === "number" ? innerRadius : 0) + 20 }
                                                 labels={({ datum }) => `${datum.x}: ${datum.y}`}
                                                 style={{ labels: { fill: "white", fontSize: 10 } }}
                                                 padAngle={2}
