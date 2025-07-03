@@ -9,14 +9,14 @@ import Link from "next/link";
 import { ProductItf } from "@/utils/types/ProductItf"; // Importar ProductItf para a listagem
 import Image from "next/image"; // Importar Image para a listagem
 
-// Importações da Victory Chart
+// Importações da Victory Chart (REMOVIDO VictoryLabel)
 import {
     VictoryBar,
     VictoryChart,
     VictoryAxis,
     VictoryTheme,
     VictoryPie,
-    VictoryLabel // Opcional, para customizar labels na pizza
+    // REMOVIDO: VictoryLabel // Não é usado no código atual
 } from 'victory';
 
 // Definir interfaces para dados do dashboard, se necessário
@@ -88,7 +88,7 @@ export default function AdminDashboardPage() {
         try {
             const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/products`, {
                 headers: {
-                    "Authorization": `Bearer ${user.token}`
+                    "Authorization": `Bearer ${user.token}` // Adiciona token para listar todos, se rota pública precisa ser pública
                 }
             });
             if (!response.ok) {
@@ -102,7 +102,7 @@ export default function AdminDashboardPage() {
         } finally {
             setIsLoadingProducts(false);
         }
-    }, [user.token]);
+    }, [user.token]); // user.token como dependência para buscar produtos após auto-login
 
     const handleDeleteProduct = async (productId: string, productName: string) => {
         if (!user.id || user.role !== "ADMIN" || !user.token) {
@@ -397,7 +397,7 @@ export default function AdminDashboardPage() {
                                                 colorScale="qualitative" 
                                                 radius={80} 
                                                 innerRadius={30} 
-                                                labelRadius={({ innerRadius }) => (typeof innerRadius === "number" ? innerRadius : 0) + 20 }
+                                                labelRadius={({ innerRadius }) => (typeof innerRadius === "number" ? innerRadius : 30) + 20 }
                                                 labels={({ datum }) => `${datum.x}: ${datum.y}`}
                                                 style={{ labels: { fill: "white", fontSize: 10 } }}
                                                 padAngle={2}
