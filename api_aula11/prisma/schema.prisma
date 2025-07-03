@@ -12,6 +12,7 @@ datasource db {
 
 enum Role {
   ADMIN
+  EDITOR_ADMIN // <--- NOVO CARGO: ADICIONE ESTA LINHA
   VISITOR
 }
 
@@ -25,7 +26,7 @@ model User {
   recoveryCodeExpiresAt DateTime?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
-  carts                 Cart[]    // Um usuário pode ter vários carrinhos (embora você tenha @unique no Cart.userId, o relacionamento aqui é um para muitos para o Prisma)
+  carts                 Cart[]
 }
 
 model Product {
@@ -40,14 +41,14 @@ model Product {
   stock       Int        @default(0)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
-  cartItems   CartItem[] // Um produto pode estar em vários itens de carrinho
+  cartItems   CartItem[]
 }
 
 model Cart {
   id        String     @id @default(uuid())
-  userId    String     @unique // Garante que um usuário tem apenas um carrinho
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade) // <--- ADICIONADO onDelete: Cascade
-  cartItems CartItem[] // Um carrinho tem vários itens
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cartItems CartItem[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 }
@@ -57,8 +58,8 @@ model CartItem {
   cartId    String
   productId String
   quantity  Int
-  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)    // <--- ADICIONADO onDelete: Cascade
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade) // <--- ADICIONADO onDelete: Cascade
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

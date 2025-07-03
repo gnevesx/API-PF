@@ -5,9 +5,10 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../prisma/client.js';
 
-// 1. Importando os middlewares centralizados e corretos
+// Importando os middlewares centralizados (CORREÇÃO AQUI)
 import { verificarToken } from '../middlewares/auth.js';
-import { verificarAdmin } from '../middlewares/adminAuth.js';
+// CORREÇÃO: Importa os novos middlewares verificarFullAdmin e verificarEditorAdmin
+import { verificarFullAdmin, verificarEditorAdmin } from '../middlewares/adminAuth.js';
 
 const router = Router();
 
@@ -76,29 +77,27 @@ router.get("/search/:term", async (req: Request, res: Response) => {
   }
 });
 
-// Rota: GET /products/summary (Resumo de produtos para Dashboard - Apenas ADMIN)
-// *** ESTA ROTA FOI MOVIDA PARA ANTES DA ROTA /:id ***
-router.get("/summary", verificarToken, verificarAdmin, async (req: Request, res: Response) => {
+// Rota: GET /products/summary (Resumo de produtos para Dashboard - Protegida para ADMIN ou EDITOR_ADMIN)
+// CORREÇÃO: Usando verificarEditorAdmin para permitir ADMIN e EDITOR_ADMIN ver o resumo
+router.get("/summary", verificarToken, verificarEditorAdmin, async (req: Request, res: Response) => {
     try {
-        const totalProducts = await prisma.product.count(); // Total de produtos no DB
+        const totalProducts = await prisma.product.count();
 
-        // Contagem e soma de estoque por categoria
         const productsByCategory = await prisma.product.groupBy({
             by: ['category'],
             _count: {
-                id: true, // Conta quantos produtos em cada categoria
+                id: true,
             },
             _sum: {
-                stock: true, // Soma o estoque total por categoria
+                stock: true,
             },
             orderBy: {
                 _count: {
-                    id: 'desc', // Ordena pela categoria com mais produtos
+                    id: 'desc',
                 },
             },
         });
 
-        // Soma total do estoque de todos os produtos
         const totalStockResult = await prisma.product.aggregate({
             _sum: {
                 stock: true,
@@ -108,11 +107,11 @@ router.get("/summary", verificarToken, verificarAdmin, async (req: Request, res:
         res.status(200).json({
             totalProducts: totalProducts,
             productsByCategory: productsByCategory.map(item => ({
-                category: item.category || 'Sem Categoria', // Garante um nome para categoria nula
+                category: item.category || 'Sem Categoria',
                 count: item._count.id,
-                totalStock: item._sum.stock || 0, // Garante que stock é 0 se for nulo
+                totalStock: item._sum.stock || 0,
             })),
-            totalStock: totalStockResult._sum.stock || 0, // Garante que totalStock é 0 se for nulo
+            totalStock: totalStockResult._sum.stock || 0,
         });
 
     } catch (error) {
@@ -123,9 +122,8 @@ router.get("/summary", verificarToken, verificarAdmin, async (req: Request, res:
 
 
 // Rota: GET /products/:id (Buscar produto por ID - Pública)
-// *** ESTA ROTA DEVE FICAR DEPOIS DE ROTAS FIXAS COMO /summary OU /search ***
 router.get("/:id", async (req: Request, res: Response) => {
-  const { id } = req.params; // ID é uma string (UUID)
+  const { id } = req.params;
   try {
     const product = await prisma.product.findUnique({
       where: { id }
@@ -140,8 +138,9 @@ router.get("/:id", async (req: Request, res: Response) => {
   }
 });
 
-// Rota: POST /products (Criar novo produto - Apenas ADMIN)
-router.post("/", verificarToken, verificarAdmin, async (req: Request, res: Response) => {
+// Rota: POST /products (Criar novo produto - Protegida para ADMIN ou EDITOR_ADMIN)
+// CORREÇÃO: Usando verificarEditorAdmin para permitir ADMIN e EDITOR_ADMIN criarem produtos
+router.post("/", verificarToken, verificarEditorAdmin, async (req: Request, res: Response) => {
   const validation = productSchema.safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({ errors: validation.error.issues });
@@ -158,8 +157,9 @@ router.post("/", verificarToken, verificarAdmin, async (req: Request, res: Respo
   }
 });
 
-// Rota: PUT /products/:id (Atualizar produto - Apenas ADMIN)
-router.put("/:id", verificarToken, verificarAdmin, async (req: Request, res: Response) => {
+// Rota: PUT /products/:id (Atualizar produto - Protegida para ADMIN ou EDITOR_ADMIN)
+// CORREÇÃO: Usando verificarEditorAdmin para permitir ADMIN e EDITOR_ADMIN atualizarem produtos
+router.put("/:id", verificarToken, verificarEditorAdmin, async (req: Request, res: Response) => {
   const { id } = req.params;
   const validation = productUpdateSchema.safeParse(req.body);
   if (!validation.success) {
@@ -178,8 +178,9 @@ router.put("/:id", verificarToken, verificarAdmin, async (req: Request, res: Res
   }
 });
 
-// Rota: DELETE /products/:id (Deletar produto - Apenas ADMIN)
-router.delete("/:id", verificarToken, verificarAdmin, async (req: Request, res: Response) => {
+// Rota: DELETE /products/:id (Deletar produto - APENAS FULL ADMIN)
+// CORREÇÃO: Usando verificarFullAdmin para manter apenas ADMIN completo para deletar
+router.delete("/:id", verificarToken, verificarFullAdmin, async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
     const deletedProduct = await prisma.product.delete({

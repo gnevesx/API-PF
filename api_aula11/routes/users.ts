@@ -9,9 +9,9 @@ import prisma from '../prisma/client.js';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 
-// Importando os middlewares centralizados
+// Importando os middlewares centralizados (CORREÇÃO AQUI: IMPORTS CORRETOS)
 import { verificarToken } from '../middlewares/auth.js';
-import { verificarAdmin } from '../middlewares/adminAuth.js';
+import { verificarFullAdmin, verificarEditorAdmin } from '../middlewares/adminAuth.js'; // Importa os novos middlewares
 
 const router = Router();
 
@@ -68,8 +68,8 @@ const transporter = nodemailer.createTransport({
 
 // --- ROTAS ---
 
-// Rota: GET /users (protegida para ADMIN)
-router.get("/", verificarToken, verificarAdmin, async (req: Request, res: Response) => {
+// Rota: GET /users (Listar todos os usuários - Protegida para ADMIN ou EDITOR_ADMIN)
+router.get("/", verificarToken, verificarEditorAdmin, async (req: Request, res: Response) => { // CORREÇÃO AQUI: USANDO verificarEditorAdmin
     try {
         const users = await prisma.user.findMany({
             select: { id: true, name: true, email: true, role: true, createdAt: true, updatedAt: true }
@@ -211,7 +211,9 @@ router.get("/:id", verificarToken, async (req: Request, res: Response) => {
     }
     const idParam = req.params.id;
     const { id: idFromToken, role: roleFromToken } = req.usuario;
-    if (roleFromToken !== Role.ADMIN && idFromToken !== idParam) {
+    // Permite que EDITOR_ADMIN veja qualquer perfil, VISITOR só pode ver o próprio.
+    // CORREÇÃO: Lógica de permissão para GET /users/:id para EDITOR_ADMIN
+    if (roleFromToken !== Role.ADMIN && roleFromToken !== Role.EDITOR_ADMIN && idFromToken !== idParam) {
         return res.status(403).json({ message: "Acesso negado: Você só pode visualizar seu próprio perfil." });
     }
     try {
@@ -236,7 +238,9 @@ router.put("/:id", verificarToken, async (req: Request, res: Response) => {
     }
     const idParam = req.params.id;
     const { id: idFromToken, role: roleFromToken } = req.usuario;
-    if (roleFromToken !== Role.ADMIN && idFromToken !== idParam) {
+    // Permite que EDITOR_ADMIN atualize qualquer perfil, VISITOR só pode atualizar o próprio.
+    // CORREÇÃO: Lógica de permissão para PUT /users/:id para EDITOR_ADMIN
+    if (roleFromToken !== Role.ADMIN && roleFromToken !== Role.EDITOR_ADMIN && idFromToken !== idParam) {
         return res.status(403).json({ message: "Acesso negado: Você só pode atualizar seu próprio perfil." });
     }
     const validation = userUpdateSchema.safeParse(req.body);
@@ -249,6 +253,11 @@ router.put("/:id", verificarToken, async (req: Request, res: Response) => {
         if (passwordErrors.length > 0) {
             return res.status(400).json({ errors: passwordErrors });
         }
+    }
+    // Se o cargo (role) está sendo atualizado, apenas ADMIN pode fazer isso.
+    // CORREÇÃO: Lógica de permissão para alteração de role por ADMIN
+    if (role && roleFromToken !== Role.ADMIN) { // Apenas ADMIN pode alterar role. EDITOR_ADMIN não pode.
+        return res.status(403).json({ message: "Acesso negado: Apenas administradores podem alterar cargos." });
     }
     try {
         const dataToUpdate: UserUpdateData = {};
@@ -264,9 +273,7 @@ router.put("/:id", verificarToken, async (req: Request, res: Response) => {
             const salt = await bcrypt.genSalt(12);
             dataToUpdate.password = await bcrypt.hash(password, salt);
         }
-        if (role && roleFromToken === Role.ADMIN) {
-            dataToUpdate.role = role;
-        }
+        if (role) dataToUpdate.role = role;
         const updatedUser = await prisma.user.update({
             where: { id: idParam },
             data: dataToUpdate,
@@ -280,7 +287,8 @@ router.put("/:id", verificarToken, async (req: Request, res: Response) => {
 });
 
 // Rota: DELETE /users/:id (protegida para ADMIN, ID é uma string)
-router.delete("/:id", verificarToken, verificarAdmin, async (req: Request, res: Response) => {
+// CORREÇÃO: Usando verificarFullAdmin para proteger esta rota (apenas ADMIN completo)
+router.delete("/:id", verificarToken, verificarFullAdmin, async (req: Request, res: Response) => {
     const idParam = req.params.id;
     try {
         await prisma.user.delete({

@@ -5,9 +5,10 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../prisma/client.js';
 
-// Importando os middlewares centralizados
+// Importando os middlewares centralizados (CORREÇÃO AQUI)
 import { verificarToken } from '../middlewares/auth.js';
-import { verificarAdmin } from '../middlewares/adminAuth.js';
+// CORREÇÃO: Importa os novos middlewares verificarFullAdmin e verificarEditorAdmin
+import { verificarFullAdmin, verificarEditorAdmin } from '../middlewares/adminAuth.js';
 
 const router = Router();
 
@@ -202,9 +203,6 @@ router.post("/checkout", verificarToken, async (req: Request, res: Response) => 
             return res.status(404).json({ message: "Carrinho não encontrado." });
         }
 
-        // Aqui você adicionaria a lógica de pagamento e criação de pedido.
-        // Por enquanto, vamos apenas esvaziar o carrinho.
-
         await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
 
         res.status(200).json({ message: "Compra finalizada com sucesso! Carrinho esvaziado." });
@@ -219,8 +217,9 @@ router.post("/checkout", verificarToken, async (req: Request, res: Response) => 
 // NOVAS ROTAS PARA DASHBOARD ADMIN - GERENCIAMENTO DE CARRINHOS DE CLIENTES
 // ====================================================================
 
-// Rota: GET /cart/admin/all (Listar TODOS os carrinhos - Apenas ADMIN)
-router.get("/admin/all", verificarToken, verificarAdmin, async (req: Request, res: Response) => {
+// Rota: GET /cart/admin/all (Listar TODOS os carrinhos - Protegida para ADMIN ou EDITOR_ADMIN)
+// CORREÇÃO: Usando verificarEditorAdmin para permitir ADMIN e EDITOR_ADMIN listarem carrinhos
+router.get("/admin/all", verificarToken, verificarEditorAdmin, async (req: Request, res: Response) => {
   try {
     const allCarts = await prisma.cart.findMany({
       include: {
@@ -240,7 +239,6 @@ router.get("/admin/all", verificarToken, verificarAdmin, async (req: Request, re
       }
     });
 
-    // Filtra carrinhos que podem não ter itens se a API retornar assim
     const activeCarts = allCarts.filter(cart => cart.cartItems.length > 0);
 
     res.status(200).json(activeCarts);
@@ -250,8 +248,9 @@ router.get("/admin/all", verificarToken, verificarAdmin, async (req: Request, re
   }
 });
 
-// Rota: DELETE /cart/admin/clear/:userId (Excluir/Esvaziar o carrinho de um usuário específico - Apenas ADMIN)
-router.delete("/admin/clear/:userId", verificarToken, verificarAdmin, async (req: Request, res: Response) => {
+// Rota: DELETE /cart/admin/clear/:userId (Excluir/Esvaziar o carrinho de um usuário específico - APENAS FULL ADMIN)
+// CORREÇÃO: Usando verificarFullAdmin para manter apenas ADMIN completo para esvaziar carrinho
+router.delete("/admin/clear/:userId", verificarToken, verificarFullAdmin, async (req: Request, res: Response) => {
   const { userId } = req.params; // ID do usuário cujo carrinho será esvaziado
 
   try {
