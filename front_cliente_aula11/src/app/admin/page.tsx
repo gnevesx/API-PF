@@ -61,6 +61,9 @@ export default function AdminDashboardPage() {
     const { user } = useGlobalStore();
     const router = useRouter();
 
+    // Novo estado para controlar se a autenticação global foi hidratada
+    const [isAuthHydrated, setIsAuthHydrated] = useState(false);
+
     const [loadingDashboardData, setLoadingDashboardData] = useState(true);
     const [dashboardError, setDashboardError] = useState<string | null>(null);
 
@@ -173,21 +176,18 @@ export default function AdminDashboardPage() {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            // CORREÇÃO: Tipagem 'data' como AdminFullCartApi[] para remover 'any'
             const data: AdminFullCartApi[] = await response.json(); 
             
-            // CORREÇÃO: Tipagem do 'cart' e 'item' no map e reduce
             setCustomerCarts(data.map((cart: AdminFullCartApi) => ({ 
                 id: cart.id,
                 userId: cart.userId,
                 userName: cart.user?.name || 'N/A',
                 userEmail: cart.user?.email || 'N/A',
-                // CORREÇÃO: Tipagem explícita para 'sum' e 'item' no reduce
                 totalItems: cart.cartItems.reduce((sum: number, item: AdminCartItemApi) => sum + item.quantity, 0), 
                 totalPrice: cart.cartItems.reduce((sum: number, item: AdminCartItemApi) => sum + (item.product?.price || 0) * item.quantity, 0),
                 createdAt: cart.createdAt,
             })));
-        } catch (err: unknown) { // Tipo 'unknown' para o erro
+        } catch (err: unknown) { 
             console.error("Erro ao buscar carrinhos de clientes:", err);
             setCartsError("Não foi possível carregar os carrinhos de clientes.");
         } finally {
@@ -214,7 +214,6 @@ export default function AdminDashboardPage() {
 
             if (response.ok) {
                 toast.success(`Carrinho de "${userName}" esvaziado com sucesso!`);
-                // Remove o carrinho esvaziado da lista para atualizar a UI
                 setCustomerCarts(prevCarts => prevCarts.filter(cart => cart.userId !== userId));
             } else {
                 const errorData = await response.json();
@@ -228,23 +227,46 @@ export default function AdminDashboardPage() {
 
 
     // =========================================================
-    // Efeitos de Carregamento Inicial do Dashboard
+    // Efeitos de Carregamento e Autenticação Inicial do Dashboard
     // =========================================================
     useEffect(() => {
+        // Log para ver o estado do usuário ao disparar o useEffect
+        console.log("AdminDashboardPage: useEffect disparado. user.id:", user.id, "user.role:", user.role);
+
+        // Verifica se o estado de autenticação já foi populado pelo GlobalStoreInitializer
+        // user.id será 'undefined' na primeira render, mas será preenchido ou permanecerá undefined se não logado
+        if (user.id !== undefined || localStorage.getItem("userToken") === null) {
+            setIsAuthHydrated(true); // Marca que a hidratação de auth está completa
+        }
+    }, [user.id]); // Roda quando user.id muda
+
+    useEffect(() => {
+        // Só executa as checagens e buscas de dados APÓS a autenticação estar hidratada
+        if (!isAuthHydrated) {
+            console.log("AdminDashboardPage: Aguardando hidratação de autenticação...");
+            return;
+        }
+        
+        console.log("AdminDashboardPage: Autenticação hidratada. Verificando permissões e buscando dados.");
+
         // Redireciona se não for admin ou não estiver logado
-        if (!user.id) {
+        if (!user.id) { // user.id será undefined se não houver token ou for inválido
+            console.log("AdminDashboardPage: Usuário não logado, redirecionando para /login.");
             router.push('/login');
             toast.warning("Você precisa estar logado para acessar o painel administrativo.");
             return;
         }
         if (user.role !== "ADMIN") {
+            console.log("AdminDashboardPage: Usuário não é ADMIN, redirecionando para /.");
             router.push('/');
             toast.error("Acesso negado: Você não tem permissão para acessar esta página.");
             return;
         }
 
-        // Se for admin e estiver logado, busca os dados do dashboard
-        if (user.id && user.role === "ADMIN") {
+        // Se chegamos aqui, o usuário é ADMIN e está logado. Agora buscamos os dados do dashboard.
+        // Evita chamadas múltiplas se já estiver carregando ou se já houver dados.
+        if (!loadingDashboardData && !dashboardError && (!products.length && !productSummary && !customerCarts.length)) {
+             // Apenas busca se os dados ainda não foram carregados com sucesso
             setLoadingDashboardData(true);
             Promise.all([
                 fetchProducts(), // Busca a lista de produtos
@@ -253,22 +275,39 @@ export default function AdminDashboardPage() {
             ])
             .then(() => {
                 setDashboardError(null);
+                console.log("AdminDashboardPage: Dados do dashboard carregados com sucesso.");
             })
             .catch((err) => {
-                console.error("Erro ao carregar dados do dashboard:", err);
+                console.error("AdminDashboardPage: Erro ao carregar dados do dashboard:", err);
                 setDashboardError("Não foi possível carregar todos os dados do dashboard.");
             })
             .finally(() => {
                 setLoadingDashboardData(false);
             });
         }
-    }, [user.id, user.role, user.token, router, fetchProducts, fetchProductSummary, fetchCustomerCarts]);
+    }, [isAuthHydrated, user.id, user.role, user.token, router, fetchProducts, fetchProductSummary, fetchCustomerCarts, loadingDashboardData, dashboardError, products.length, productSummary, customerCarts.length]);
 
 
+    // Renderização baseada no estado de carregamento de autenticação
+    if (!isAuthHydrated) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+                <p className="text-xl text-gray-700 dark:text-gray-300">Verificando permissões de administrador...</p>
+            </div>
+        );
+    }
+
+    // Se o usuário não for admin ou não estiver logado, o useEffect já redireciona.
+    // Este return só será alcançado se o redirect não ocorrer imediatamente.
+    if (!user.id || user.role !== "ADMIN") {
+        return null; // Ou um componente de erro/acesso negado se o redirect falhar
+    }
+
+    // Renderização do Dashboard (após autenticação e carregamento de dados)
     if (loadingDashboardData) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-                <p className="text-xl text-gray-700 dark:text-gray-300">Carregando Dashboard...</p>
+                <p className="text-xl text-gray-700 dark:text-gray-300">Carregando dados do Dashboard...</p>
             </div>
         );
     }
@@ -279,12 +318,6 @@ export default function AdminDashboardPage() {
                 <p className="text-xl text-red-500">{dashboardError}</p>
             </div>
         );
-    }
-
-    // Se o usuário não for admin ou não estiver logado, o useEffect já redireciona.
-    // Este return só será alcançado se o redirect não ocorrer imediatamente.
-    if (!user.id || user.role !== "ADMIN") {
-        return null; // ou uma mensagem mais amigável, mas o redirect deve ocorrer antes
     }
 
     // =========================================================
