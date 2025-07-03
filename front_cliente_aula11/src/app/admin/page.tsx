@@ -17,24 +17,12 @@ import {
     VictoryPie,
 } from 'victory';
 
-// Interface para dados do usuário como vêm da API (para a lista de clientes)
-interface ClientUser {
-    id: string;
-    name: string;
-    email: string;
-    role: 'ADMIN' | 'VISITOR';
-    createdAt: string;
-    updatedAt: string;
-}
-
-// Definir interfaces para dados do dashboard, se necessário
 interface ProductSummary {
     totalProducts: number;
     productsByCategory: { category: string; count: number; totalStock: number }[];
     totalStock: number;
 }
 
-// NOVAS INTERFACES para os dados do carrinho como vêm da API /cart/admin/all
 interface AdminUserInCart {
     id: string;
     name: string;
@@ -65,7 +53,6 @@ interface AdminFullCartApi {
     cartItems: AdminCartItemApi[];
 }
 
-// Definir interface para o estado do frontend dos carrinhos (mais simples para exibir)
 interface CartSummary {
     id: string;
     userId: string;
@@ -92,16 +79,17 @@ export default function AdminDashboardPage() {
     const [isLoadingCarts, setIsLoadingCarts] = useState(true);
     const [cartsError, setCartsError] = useState<string | null>(null);
 
-    // =========================================================
-    // NOVOS ESTADOS PARA LISTAGEM DE CLIENTES
-    // =========================================================
+    interface ClientUser {
+        id: string;
+        name: string;
+        email: string;
+        role: string;
+    }
+
     const [clients, setClients] = useState<ClientUser[]>([]);
     const [isLoadingClients, setIsLoadingClients] = useState(true);
     const [clientsError, setClientsError] = useState<string | null>(null);
 
-    // =========================================================
-    // Funções para LISTAGEM DE PRODUTOS
-    // =========================================================
     const fetchProducts = useCallback(async () => {
         setIsLoadingProducts(true);
         setProductsError(null);
@@ -153,9 +141,6 @@ export default function AdminDashboardPage() {
         }
     };
 
-    // =========================================================
-    // Funções para GRÁFICOS (Resumo de Produtos)
-    // =========================================================
     const fetchProductSummary = useCallback(async () => {
         setIsLoadingSummary(true);
         setSummaryError(null);
@@ -178,9 +163,6 @@ export default function AdminDashboardPage() {
         }
     }, [user.token]);
 
-    // =========================================================
-    // Funções para GERENCIAMENTO DE CARRINHOS
-    // =========================================================
     const fetchCustomerCarts = useCallback(async () => {
         setIsLoadingCarts(true);
         setCartsError(null);
@@ -193,18 +175,18 @@ export default function AdminDashboardPage() {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            const data: AdminFullCartApi[] = await response.json(); 
-            
-            setCustomerCarts(data.map((cart: AdminFullCartApi) => ({ 
+            const data: AdminFullCartApi[] = await response.json();
+
+            setCustomerCarts(data.map((cart: AdminFullCartApi) => ({
                 id: cart.id,
                 userId: cart.userId,
                 userName: cart.user?.name || 'N/A',
                 userEmail: cart.user?.email || 'N/A',
-                totalItems: cart.cartItems.reduce((sum: number, item: AdminCartItemApi) => sum + item.quantity, 0), 
+                totalItems: cart.cartItems.reduce((sum: number, item: AdminCartItemApi) => sum + item.quantity, 0),
                 totalPrice: cart.cartItems.reduce((sum: number, item: AdminCartItemApi) => sum + (item.product?.price || 0) * item.quantity, 0),
                 createdAt: cart.createdAt,
             })));
-        } catch (err: unknown) { 
+        } catch (err: unknown) {
             console.error("Erro ao buscar carrinhos de clientes:", err);
             setCartsError("Não foi possível carregar os carrinhos de clientes.");
         } finally {
@@ -220,7 +202,6 @@ export default function AdminDashboardPage() {
         if (!confirm(`Tem certeza que deseja esvaziar o carrinho de "${userName}"?`)) {
             return;
         }
-
         try {
             const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/cart/admin/clear/${userId}`, {
                 method: "DELETE",
@@ -228,7 +209,6 @@ export default function AdminDashboardPage() {
                     "Authorization": `Bearer ${user.token}`
                 }
             });
-
             if (response.ok) {
                 toast.success(`Carrinho de "${userName}" esvaziado com sucesso!`);
                 setCustomerCarts(prevCarts => prevCarts.filter(cart => cart.userId !== userId));
@@ -242,14 +222,11 @@ export default function AdminDashboardPage() {
         }
     };
 
-    // =========================================================
-    // NOVAS FUNÇÕES PARA GERENCIAMENTO DE CLIENTES
-    // =========================================================
     const fetchClients = useCallback(async () => {
         setIsLoadingClients(true);
         setClientsError(null);
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/users`, { // Rota para listar todos os usuários (protegida para admin)
+            const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/users`, {
                 headers: {
                     "Authorization": `Bearer ${user.token}`
                 }
@@ -258,27 +235,25 @@ export default function AdminDashboardPage() {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const data: ClientUser[] = await response.json();
-            // Filtra o próprio admin logado para não se excluir da lista, se desejar
-            setClients(data.filter(client => client.id !== user.id)); 
+            setClients(data.filter(client => client.id !== user.id));
         } catch (err: unknown) {
             console.error("Erro ao buscar clientes:", err);
             setClientsError("Não foi possível carregar a lista de clientes.");
         } finally {
             setIsLoadingClients(false);
         }
-    }, [user.id, user.token]); // Adicionado user.id como dependência para garantir que não exclua a si mesmo na lista
+    }, [user.id, user.token]);
 
     const handleDeleteClient = async (clientId: string, clientName: string, clientRole: string) => {
         if (!user.id || user.role !== "ADMIN" || !user.token) {
             toast.error("Você não tem permissão para deletar usuários.");
             return;
         }
-        // Evita que um admin tente deletar a si mesmo ou a outro admin
         if (clientId === user.id) {
             toast.error("Você não pode deletar sua própria conta.");
             return;
         }
-        if (clientRole === "ADMIN") { // Também impede deletar outros admins
+        if (clientRole === "ADMIN") {
             toast.error("Você não pode deletar outro administrador.");
             return;
         }
@@ -288,7 +263,7 @@ export default function AdminDashboardPage() {
         }
 
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/users/${clientId}`, { // Rota DELETE /users/:id
+            const response = await fetch(`${process.env.NEXT_PUBLIC_URL_API}/users/${clientId}`, {
                 method: "DELETE",
                 headers: {
                     "Authorization": `Bearer ${user.token}`
@@ -298,8 +273,7 @@ export default function AdminDashboardPage() {
             if (response.ok) {
                 toast.success(`Conta de "${clientName}" excluída com sucesso!`);
                 setClients(prevClients => prevClients.filter(client => client.id !== clientId));
-                // Opcional: recarregar carrinhos ou resumo se houver impactos na contagem
-                fetchCustomerCarts(); 
+                fetchCustomerCarts();
                 fetchProductSummary();
             } else {
                 const errorData = await response.json();
@@ -311,36 +285,32 @@ export default function AdminDashboardPage() {
         }
     };
 
-
-    // =========================================================
-    // Efeitos de Carregamento e Autenticação Inicial do Dashboard
-    // =========================================================
     useEffect(() => {
         const isAuthenticating = (user.id === undefined && typeof window !== 'undefined' && localStorage.getItem("userToken"));
 
         if (isAuthenticating) {
-            return; 
+            return;
         }
 
-        if (!user.id) { 
+        if (!user.id) {
             router.push('/login');
             toast.warning("Você precisa estar logado para acessar o painel administrativo.");
             return;
         }
-        
-        if (user.role !== "ADMIN") { 
+
+        if (user.role !== "ADMIN") {
             router.push('/');
             toast.error("Acesso negado: Você não tem permissão para acessar esta página.");
             return;
         }
 
-        if (!productSummary && !customerCarts.length && !products.length && !clients.length) { 
-            setLoadingDashboardData(true); 
+        if (!productSummary && !customerCarts.length && !products.length && !clients.length) {
+            setLoadingDashboardData(true);
             Promise.all([
-                fetchProducts(), 
+                fetchProducts(),
                 fetchProductSummary(),
                 fetchCustomerCarts(),
-                fetchClients() // Adiciona a busca de clientes aqui
+                fetchClients()
             ])
             .then(() => {
                 setDashboardError(null);
@@ -350,18 +320,13 @@ export default function AdminDashboardPage() {
                 setDashboardError("Não foi possível carregar todos os dados do dashboard.");
             })
             .finally(() => {
-                setLoadingDashboardData(false); 
+                setLoadingDashboardData(false);
             });
         } else {
              setLoadingDashboardData(false);
         }
 
     }, [user.id, user.role, user.token, router, fetchProducts, fetchProductSummary, fetchCustomerCarts, fetchClients, productSummary, customerCarts.length, products.length, clients.length]);
-
-
-    // =========================================================
-    // Renderização baseada no estado de carregamento e autenticação
-    // =========================================================
 
     if (user.id === undefined && typeof window !== 'undefined' && localStorage.getItem("userToken")) {
         return (
@@ -370,9 +335,9 @@ export default function AdminDashboardPage() {
             </div>
         );
     }
-    
+
     if (!user.id || user.role !== "ADMIN") {
-        return null; 
+        return null;
     }
 
     if (loadingDashboardData) {
