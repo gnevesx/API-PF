@@ -229,21 +229,22 @@ export default function AdminDashboardPage() {
     useEffect(() => {
         console.log("AdminDashboardPage: useEffect principal disparado. user.id:", user.id, "user.role:", user.role);
 
-        // Se o user.id ainda é undefined E há um token em localStorage (auto-login pendente)
-        // Mostra um loading de autenticação.
-        const isAuthenticating = (user.id === undefined && localStorage.getItem("userToken"));
+        // Verifica se o GlobalStoreInitializer já terminou de tentar logar o usuário.
+        // Se user.id ainda é undefined, mas há um token no localStorage, significa que o auto-login está em andamento.
+        const isAuthenticating = (user.id === undefined && typeof window !== 'undefined' && localStorage.getItem("userToken"));
 
         if (isAuthenticating) {
-            console.log("AdminDashboardPage: Autenticação em andamento, aguardando...");
-            // Retorna para exibir o loading de autenticação
-            return; 
+            console.log("AdminDashboardPage: Auto-login em andamento, aguardando estado final do usuário.");
+            // Não faça mais nada neste useEffect por enquanto, espere o próximo ciclo de renderização
+            // quando o 'user' do GlobalStore já estará populado pelo GlobalStoreInitializer.
+            return;
         }
 
-        // Se chegamos aqui, o estado de autenticação foi hidratado (user.id não é mais undefined ou token é null).
+        // --- Se chegamos aqui, o estado de autenticação foi hidratado (user.id não é mais undefined ou token é null). ---
 
-        // Cenario 1: Usuario não logado ou token inválido/expirado
+        // Cenario 1: Usuário não logado ou token inválido/expirado
         if (!user.id) { 
-            console.log("AdminDashboardPage: Usuário não logado ou token inválido, redirecionando para /login.");
+            console.log("AdminDashboardPage: Usuário não logado ou token inválido/expirado, redirecionando para /login.");
             router.push('/login');
             toast.warning("Você precisa estar logado para acessar o painel administrativo.");
             return;
@@ -259,9 +260,9 @@ export default function AdminDashboardPage() {
 
         // Cenario 3: O usuário está logado e é ADMIN. Agora buscamos os dados do dashboard.
         console.log("AdminDashboardPage: Usuário é ADMIN. Buscando dados do dashboard.");
-        // Apenas busca se os dados principais ainda não foram carregados
+        // Apenas busca se os dados principais ainda não foram carregados (para evitar chamadas redundantes)
         if (!productSummary && !customerCarts.length && !products.length) { 
-            setLoadingDashboardData(true);
+            setLoadingDashboardData(true); // Ativa o loading para os dados do dashboard
             Promise.all([
                 fetchProducts(), 
                 fetchProductSummary(),
@@ -276,10 +277,11 @@ export default function AdminDashboardPage() {
                 setDashboardError("Não foi possível carregar todos os dados do dashboard.");
             })
             .finally(() => {
-                setLoadingDashboardData(false);
+                setLoadingDashboardData(false); // Desativa o loading, mesmo se houver erro
             });
         } else {
-             // Dados já carregados ou em processo, apenas garantir que o loading correto esteja setado
+             // Se os dados já foram carregados (ou estão em processo por outra renderização), 
+             // apenas garantir que o estado de carregamento esteja correto.
              setLoadingDashboardData(false);
         }
 
@@ -290,8 +292,9 @@ export default function AdminDashboardPage() {
     // Renderização baseada no estado de carregamento e autenticação
     // =========================================================
 
-    // Se a autenticação ainda está em andamento
-    if (user.id === undefined && localStorage.getItem("userToken")) {
+    // Tela de carregamento enquanto a autenticação está sendo verificada (no auto-login)
+    // Mostra se user.id é undefined MAS há um token no localStorage (auto-login está em andamento)
+    if (user.id === undefined && typeof window !== 'undefined' && localStorage.getItem("userToken")) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
                 <p className="text-xl text-gray-700 dark:text-gray-300">Verificando permissões de administrador...</p>
@@ -299,12 +302,13 @@ export default function AdminDashboardPage() {
         );
     }
     
-    // Se o usuário não for admin ou não estiver logado (após a verificação)
+    // Se o usuário não for admin ou não estiver logado após a verificação final
+    // (O useEffect já deve ter redirecionado, este é um fallback visual)
     if (!user.id || user.role !== "ADMIN") {
-        return null; // O redirect já deve ter acontecido pelo useEffect
+        return null; // ou um componente de "Acesso Negado" mais sofisticado
     }
 
-    // Renderização do Dashboard (após autenticação e carregamento de dados)
+    // Tela de carregamento dos dados do Dashboard (após autenticação)
     if (loadingDashboardData) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -313,6 +317,7 @@ export default function AdminDashboardPage() {
         );
     }
 
+    // Tela de erro geral do dashboard
     if (dashboardError) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -366,7 +371,7 @@ export default function AdminDashboardPage() {
                                         </ul>
                                     </div>
                                 ) : (
-                                    <p className="text-500 dark:text-gray-400">Nenhuma categoria encontrada.</p>
+                                    <p className="text-gray-500 dark:text-gray-400">Nenhuma categoria encontrada.</p>
                                 )}
                             </div>
                         ) : (
